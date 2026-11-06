@@ -1,17 +1,32 @@
 name: VM boot test
 
-# Manual-only: the boot test pulls the compose images and boots a full guest,
-# so hosted spend happens only when a person starts it. Locally the identical
-# attribute runs with `nix build .#checks.x86_64-linux.vm-test`.
+# Manual by default: the boot test pulls the compose images and boots a full
+# guest, so hosted spend happens only when a person starts it. Locally the
+# identical attribute runs with `nix build .#checks.x86_64-linux.vm-test`.
 
 on:
   workflow_dispatch:
+  push:
+    branches: [claude/initial-import]
 
 jobs:
   vm-test:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v6
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /opt/hostedtoolcache/CodeQL
+          df -h /
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
+          test -c /dev/kvm
       - uses: DeterminateSystems/nix-installer-action@v23
       - name: Boot the demo instance and assert convergence
-        run: nix build .#checks.x86_64-linux.vm-test
+        run: nix build .#checks.x86_64-linux.vm-test -L
