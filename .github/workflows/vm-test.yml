@@ -1,0 +1,17 @@
+name: VM boot test
+
+# Manual-only: the boot test pulls the compose images and boots a full guest,
+# so hosted spend happens only when a person starts it. Locally the identical
+# attribute runs with `nix build .#checks.x86_64-linux.vm-test`.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  vm-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: DeterminateSystems/nix-installer-action@v23
+      - name: Boot the demo instance and assert convergence
+        run: nix build .#checks.x86_64-linux.vm-test
