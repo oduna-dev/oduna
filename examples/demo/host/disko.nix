@@ -108,6 +108,11 @@ in
           "appdata/vaultwarden" = zfsFs "/mnt/fast-pool/appdata/vaultwarden" { recordsize = "16k"; };
           "appdata/actual-budget" = zfsFs "/mnt/fast-pool/appdata/actual-budget" { recordsize = "16k"; };
           "appdata/authentik" = zfsFs "/mnt/fast-pool/appdata/authentik" { recordsize = "16k"; };
+          # Every parent of a nested dataset must be declared: ZFS creates an
+          # undeclared parent with canmount=on, and zfs-mount.service then
+          # mounts it over the child's mountpoint directory while systemd
+          # mounts the child, which fails the boot into emergency mode.
+          "appdata/immich" = zfsFs "/mnt/fast-pool/appdata/immich" { };
           "appdata/immich/postgres" = zfsFs "/mnt/fast-pool/appdata/immich/postgres" { recordsize = "16k"; };
           "appdata/forgejo" = zfsFs "/mnt/fast-pool/appdata/forgejo" { recordsize = "64k"; };
           "appdata/navidrome" = zfsFs "/mnt/fast-pool/appdata/navidrome" { recordsize = "128k"; };
