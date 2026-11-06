@@ -28,5 +28,26 @@ jobs:
           ls -l /dev/kvm
           test -c /dev/kvm
       - uses: DeterminateSystems/nix-installer-action@v23
+      - name: Check KVM inside the Nix build sandbox
+        run: |
+          nix config show | grep -E '^(system-features|extra-system-features|sandbox)' || true
+          nix build --impure -L --no-link --expr '
+            let
+              flake = builtins.getFlake "'"$PWD"'";
+              pkgs = flake.inputs.nixpkgs.legacyPackages.x86_64-linux;
+            in
+            pkgs.runCommand "kvm-sandbox-check" { requiredSystemFeatures = [ "kvm" ]; } "
+              ls -l /dev/kvm
+              test -w /dev/kvm
+              touch $out
+            "'
       - name: Boot the demo instance and assert convergence
-        run: nix build .#checks.x86_64-linux.vm-test -L
+        shell: bash
+        run: |
+          status=0
+          timeout 25m nix build .#checks.x86_64-linux.vm-test -L > build.log 2>&1 || status=$?
+          # The driver repeats two lines every few seconds while the guest
+          # shell is silent; drop them so the guest console stays readable.
+          grep -v -e 'Guest root shell did not produce' -e 'To debug, enter the VM' build.log | tail -n 1500
+          echo "nix build exit status: $status"
+          exit "$status"
