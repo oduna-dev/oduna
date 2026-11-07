@@ -9,7 +9,7 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: DeterminateSystems/nix-installer-action@v23
       - name: Lint
         run: nix run .#lint
@@ -17,7 +17,7 @@ jobs:
   eval:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: DeterminateSystems/nix-installer-action@v23
       - name: Evaluate the VM boot test (demo instance)
         run: nix eval --raw .#checks.x86_64-linux.vm-test.drvPath
