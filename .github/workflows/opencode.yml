@@ -21,7 +21,10 @@ on:
 # that defaults to "ask" is decided here: file edits and doom-loop
 # continuation are denied, and the only directory outside the checkout the
 # review may use is /tmp. A question nobody can answer would hang the job
-# until the job timeout.
+# until the step timeout. The same timeout turns a review that cannot get an
+# answer from the model (usage limit, outage; the client retries silently)
+# into a failed step, which the jobs report as a warning instead of a
+# cancelled check.
 env:
   OPENCODE_PERMISSION: >-
     {"edit": "deny", "doom_loop": "deny", "external_directory": {"/tmp/*":
@@ -53,6 +56,7 @@ jobs:
         uses: anomalyco/opencode/github@latest
         if: env.OPENCODE_API_KEY != ''
         continue-on-error: true
+        timeout-minutes: 15
         with:
           model: opencode-go/kimi-k2.7-code
           prompt: |
@@ -118,6 +122,7 @@ jobs:
         uses: anomalyco/opencode/github@latest
         if: env.OPENCODE_API_KEY != ''
         continue-on-error: true
+        timeout-minutes: 15
         with:
           model: opencode-go/kimi-k2.7-code
           mentions: /opencode-review
