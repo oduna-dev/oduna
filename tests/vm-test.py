@@ -234,9 +234,10 @@ machine.succeed(
     BORG + f"borg list --short '::{archive}' | grep -q '^mnt/tank/backups/immich/immich_db_'",
 )
 
-# Immich round trip (the restore drill's runbook, sections 2 and 3): lose the
-# server, the library file, the local dumps and the whole database; fetch files
-# and dumps from Borg, restore the dump and find the seeded photo byte-identical.
+# Restore round trip through homelab-restore: lose the Immich database and
+# library file, the local dumps, a Forgejo repository and the Vaultwarden and
+# Actual databases. The tool fetches files and dumps from Borg and puts every
+# dump back by its type.
 machine.succeed(
     """db="$(docker exec immich_postgres printenv POSTGRES_DB)" && \
       docker stop immich_server && \
@@ -245,21 +246,44 @@ machine.succeed(
       find /mnt/tank/immich -type f -name '*.jpg' \
         ! -path '*/thumbs/*' ! -path '*/encoded-video/*' ! -path '*/backups/*' -delete && \
       rm -rf /mnt/tank/backups/*""",
-)
-machine.fail(
-    "docker exec immich_postgres psql -U postgres -lqt | grep -qw \"$(docker exec immich_postgres printenv POSTGRES_DB)\""
+    """e="$(sed -n 's/^ADMIN_EMAIL=//p' /run/secrets/admin.env)" && \
+      pw="$(sed -n 's/^ADMIN_PASSWORD=//p' /run/secrets/admin.env)" && u="${e%%@*}" && \
+      curl -fsS -X DELETE -u "$u:$pw" "http://127.0.0.1:3000/api/v1/repos/$u/drill-seed" """,
+    "systemctl stop vaultwarden.service actual.service",
+    "rm -f /mnt/fast-pool/appdata/vaultwarden/db.sqlite3* /mnt/fast-pool/appdata/actual-budget/server-files/account.sqlite*",
 )
 machine.fail("ls /mnt/tank/backups/immich/immich_db_*.sql.gz")
-machine.succeed(
-    # Archive paths are absolute without the leading slash: extracting from /
-    # puts files back where they were.
-    "cd / && " + BORG + f"borg extract '::{archive}' mnt/tank/immich mnt/tank/backups",
-    "gunzip -c /mnt/tank/backups/immich/immich_db_*.sql.gz "
-    "| docker exec -i immich_postgres psql -U postgres > /dev/null",
-    "docker start immich_server",
+machine.fail(
+    "MANIFEST='" + manifest + "' " + DRILL + "MODE=verify bash /etc/drill-data-remote.sh"
 )
+
+# Without --yes the tool only prints its plan.
+machine.succeed(
+    "homelab-restore | grep -q 'plan only'",
+    "! ls /mnt/tank/backups/immich/immich_db_*.sql.gz",
+)
+machine.succeed("homelab-restore --yes")
+
 machine.wait_until_succeeds(
     "MANIFEST='" + manifest + "' " + DRILL + "MODE=verify bash /etc/drill-data-remote.sh"
+)
+machine.succeed(
+    "systemctl is-active forgejo.service vaultwarden.service actual.service",
+    """for f in /mnt/fast-pool/appdata/vaultwarden/db.sqlite3 \
+      /mnt/fast-pool/appdata/actual-budget/server-files/account.sqlite; do
+      [ "$(sqlite3 "$f" 'PRAGMA integrity_check')" = ok ] || { echo "$f fails the integrity check"; exit 1; }
+    done""",
+    "[ \"$(stat -c %U /mnt/fast-pool/appdata/vaultwarden/db.sqlite3)\" = vaultwarden ]",
+    "[ \"$(stat -c %U /mnt/fast-pool/appdata/actual-budget/server-files/account.sqlite)\" = actual ]",
+)
+# Authentik was restored in place: the server and worker are back and answer.
+machine.wait_until_succeeds(
+    f"curl --cacert {CA} -fsS https://auth.@internalDomain@/-/health/live/ > /dev/null"
+)
+machine.succeed(
+    """for n in authentik_server authentik_worker; do
+      docker ps --filter "name=$n" --filter status=running --format '{{.Names}}' | grep -qx "$n" || exit 1
+    done"""
 )
 
 print("vm-test: OK")
