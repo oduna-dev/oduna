@@ -177,10 +177,22 @@ machine.succeed(
 machine.succeed("curl -fsS http://127.0.0.1:5006/account/needs-bootstrap > /dev/null")
 machine.succeed("curl -fsS http://127.0.0.1:4533/ > /dev/null")
 
-# Nightly dumps: run the job once and check that every app's dump landed,
-# that the stopped forgejo is back, and that no backup snapshot is left.
+# Restore drill data: the seed script's host half writes a Forgejo repository
+# and an Immich photo through the apps' APIs before the dumps are taken, so the
+# dumps below hold known data and the round trip further down can check it.
 machine.wait_until_succeeds("docker exec immich_postgres pg_isready -U postgres")
 machine.wait_until_succeeds("docker exec authentik_postgres pg_isready -U authentik")
+DRILL = (
+    f"CURL_CA_BUNDLE={CA} INTERNAL_DOMAIN=@internalDomain@ FORGEJO_PORT=3000 "
+    "FORGEJO_ENABLED=true IMMICH_ENABLED=true "
+)
+manifest = machine.succeed(DRILL + "MODE=seed bash /etc/drill-data-remote.sh").strip()
+machine.succeed(
+    "MANIFEST='" + manifest + "' " + DRILL + "MODE=verify bash /etc/drill-data-remote.sh"
+)
+
+# Nightly dumps: run the job once and check that every app's dump landed,
+# that the stopped forgejo is back, and that no backup snapshot is left.
 machine.succeed("systemctl start backup-databases.service")
 machine.succeed(
     """for pat in \
@@ -205,6 +217,28 @@ machine.succeed(
     "gzip -t /mnt/tank/backups/immich/immich_db_*.sql.gz",
     "docker exec -i authentik_postgres pg_restore --list < /mnt/tank/backups/authentik/authentik_db_*.dump > /dev/null",
     "unzip -tq /mnt/tank/backups/forgejo/forgejo_dump_*.zip",
+)
+
+# Immich round trip (the restore drill's runbook, section 3): lose the whole
+# database, restore the dump into the empty cluster state and find the seeded
+# photo again. The original file stays on disk; restoring the library files
+# is the Borg step and not part of this test.
+machine.succeed(
+    """db="$(docker exec immich_postgres printenv POSTGRES_DB)" && \
+      docker stop immich_server && \
+      docker exec immich_postgres psql -U postgres -d postgres \
+        -c "DROP DATABASE \"$db\" WITH (FORCE)" """,
+)
+machine.fail(
+    "docker exec immich_postgres psql -U postgres -lqt | grep -qw \"$(docker exec immich_postgres printenv POSTGRES_DB)\""
+)
+machine.succeed(
+    "gunzip -c /mnt/tank/backups/immich/immich_db_*.sql.gz "
+    "| docker exec -i immich_postgres psql -U postgres -v ON_ERROR_STOP=0 > /dev/null",
+    "docker start immich_server",
+)
+machine.wait_until_succeeds(
+    "MANIFEST='" + manifest + "' " + DRILL + "MODE=verify bash /etc/drill-data-remote.sh"
 )
 
 print("vm-test: OK")
