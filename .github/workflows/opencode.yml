@@ -1,0 +1,143 @@
+name: opencode-review
+
+# Reviews pull requests from this repository when they are opened or marked
+# ready, and on demand when a maintainer comments "/opencode-review". Fork
+# pull requests get no secrets and are only reviewed on a maintainer's
+# comment. Without the OPENCODE_API_KEY secret the jobs skip their steps, and
+# a failing review (quota exhausted, service outage) becomes a warning
+# annotation instead of a red check. The prompt asks for findings only; the
+# action's GitHub app token can write to the branch, so a review that ignores
+# this still pushes commits and must be checked like any other change.
+
+on:
+  pull_request:
+    types: [opened, ready_for_review]
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+
+jobs:
+  review-ready:
+    if: >-
+      github.event_name == 'pull_request' && !github.event.pull_request.draft &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: read
+      issues: read
+    env:
+      OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+    steps:
+      - name: Skip without the API key
+        if: env.OPENCODE_API_KEY == ''
+        run: echo "::notice::OPENCODE_API_KEY is not set; skipping the review"
+      - uses: actions/checkout@v6
+        if: env.OPENCODE_API_KEY != ''
+        with:
+          persist-credentials: false
+      - id: review
+        uses: anomalyco/opencode/github@latest
+        if: env.OPENCODE_API_KEY != ''
+        continue-on-error: true
+        with:
+          model: opencode-go/kimi-k2.7-code
+          prompt: |
+            Review this pull request.
+
+            Apply the conventions in AGENTS.md:
+            - English only: code comments, docs, commit and PR messages.
+            - No changelog-style comments or documentation (state current facts only).
+            - One canonical place per fact: code comments hold implementation
+              details, the README holds the overview and manual steps.
+            - No instance data in this repository: domains, host names, accounts,
+              disk IDs, keys and e-mail addresses belong to instances; examples
+              use example.org and the demo instance.
+            - Nix code: global parameters go through the typed options.homelab
+              schema, never hardcoded in service modules; only the plaintext
+              secrets template lives here; nixfmt RFC style.
+            - No logic in Nix strings: host-side scripts are files with a shebang;
+              parameters reach them through the environment or arguments, never
+              through Nix interpolation into script text.
+            - docs/vision.md is the plan: implemented items are replaced by
+              pointers to the code, and implementation files never cite the plan.
+
+            This is a review only: do not change files, commit or push. Report
+            your findings as a comment.
+
+            Check for correctness issues, bugs, and credential or
+            instance-identifier leaks in the changed files. Report findings
+            concisely; do not suggest stylistic rewrites that violate the
+            conventions above.
+      - name: Report a failed review without failing the check
+        if: steps.review.outcome == 'failure'
+        run:
+          echo "::warning::The OpenCode review failed (quota exhausted or a
+          service outage?); see the review step log"
+
+  # Manual review on a command-style comment from a maintainer, e.g.
+  # "/opencode-review".
+  review-on-demand:
+    if: >-
+      ((github.event_name == 'issue_comment' && github.event.issue.pull_request
+      != null) || github.event_name == 'pull_request_review_comment') &&
+      contains(github.event.comment.body, '/opencode-review') &&
+      contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'),
+      github.event.comment.author_association)
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      pull-requests: write
+      issues: write
+    env:
+      OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+    steps:
+      - name: Skip without the API key
+        if: env.OPENCODE_API_KEY == ''
+        run: echo "::notice::OPENCODE_API_KEY is not set; skipping the review"
+      - uses: actions/checkout@v6
+        if: env.OPENCODE_API_KEY != ''
+        with:
+          persist-credentials: false
+      - id: review
+        uses: anomalyco/opencode/github@latest
+        if: env.OPENCODE_API_KEY != ''
+        continue-on-error: true
+        with:
+          model: opencode-go/kimi-k2.7-code
+          mentions: /opencode-review
+          prompt: |
+            Review this pull request.
+
+            Apply the conventions in AGENTS.md:
+            - English only: code comments, docs, commit and PR messages.
+            - No changelog-style comments or documentation (state current facts only).
+            - One canonical place per fact: code comments hold implementation
+              details, the README holds the overview and manual steps.
+            - No instance data in this repository: domains, host names, accounts,
+              disk IDs, keys and e-mail addresses belong to instances; examples
+              use example.org and the demo instance.
+            - Nix code: global parameters go through the typed options.homelab
+              schema, never hardcoded in service modules; only the plaintext
+              secrets template lives here; nixfmt RFC style.
+            - No logic in Nix strings: host-side scripts are files with a shebang;
+              parameters reach them through the environment or arguments, never
+              through Nix interpolation into script text.
+            - docs/vision.md is the plan: implemented items are replaced by
+              pointers to the code, and implementation files never cite the plan.
+
+            This is a review only: do not change files, commit or push. Report
+            your findings as a comment.
+
+            Check for correctness issues, bugs, and credential or
+            instance-identifier leaks in the changed files. Report findings
+            concisely; do not suggest stylistic rewrites that violate the
+            conventions above.
+      - name: Report a failed review without failing the check
+        if: steps.review.outcome == 'failure'
+        run:
+          echo "::warning::The OpenCode review failed (quota exhausted or a
+          service outage?); see the review step log"
