@@ -5,6 +5,10 @@
 # if anything failed.
 #
 # Usage: checks.sh <host-flake-name> root@<target>   (run from the instance directory)
+#
+# CHECK_BACKUPS=1 adds the backup checks (the nightly dumps ran recently and
+# neither backup job has failed). They are off by default because a freshly
+# installed host has not run its first nightly job yet.
 set -euo pipefail
 
 if [ "$#" -ne 2 ]; then
@@ -95,6 +99,21 @@ if [ "$identity_enabled" = "true" ]; then
 
   check "idp outpost forwards on music" remote \
     'curl -s -o /dev/null -w %{http_code} http://127.0.0.1:9302/outpost.goauthentik.io/ping | grep -q 200'
+fi
+
+# --- backups (opt-in, see the header) ---------------------------------------------
+
+if [ "${CHECK_BACKUPS:-0}" = "1" ]; then
+  bulk_path="$(nix eval --raw "$homelab_dir#nixosConfigurations.${host}.config.homelab.storage.bulkPath")"
+  check "nightly dumps not failed" remote \
+    "! systemctl is-failed --quiet backup-databases.service"
+  check "nightly dumps written within 36 hours" remote \
+    "test -n \"\$(find '$bulk_path/backups' -type f -mmin -2160 | head -n 1)\""
+  borg_repo="$(nix eval --raw "$homelab_dir#nixosConfigurations.${host}.config.homelab.backup.storageBoxRepo")"
+  if [ -n "$borg_repo" ]; then
+    check "offsite backup not failed" remote \
+      "! systemctl is-failed --quiet borgbackup-job-storagebox.service"
+  fi
 fi
 
 # --- healthchecks heartbeat green (optional, needs the provider key) ------------

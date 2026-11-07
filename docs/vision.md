@@ -664,7 +664,9 @@ configuration, and a run of the VM boot test on KVM hardware.
 - Remove family literals into the instance config (C11).
 - **Milestone — restore drill:** rebuild the family instance from Git on
   different hardware (spare box or VM), restore the backups, log in via SSO.
-  This is the proof of the mission and gates everything after Phase 1.
+  This is the proof of the mission and gates everything after Phase 1. Prepared:
+  the procedure and its open points are in `docs/restore-drill.md`; the drill
+  itself is pending.
 
 ### Phase 2 — Instance model
 

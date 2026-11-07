@@ -16,14 +16,18 @@ in
           subdomain = "budget";
           port = 5006;
         };
-        backup.dumps = [
-          {
-            file = "actual_account_{date}.sqlite3";
-            type = "sqlite";
-            dataDir = "${cfg.storage.appdataPath}/actual-budget";
-            db = "server-files/account.sqlite";
-          }
-        ];
+        backup = {
+          dumps = [
+            {
+              file = "actual_account_{date}.sqlite3";
+              type = "sqlite";
+              dataDir = "${cfg.storage.appdataPath}/actual-budget";
+              db = "server-files/account.sqlite";
+            }
+          ];
+          # The budget files themselves; the dump only lists them.
+          paths = [ "${cfg.storage.appdataPath}/actual-budget/user-files" ];
+        };
       };
     }
     (lib.mkIf app.enable {
