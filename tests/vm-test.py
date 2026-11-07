@@ -29,6 +29,17 @@ def measure(title, command):
     _notes.append(machine.succeed("( " + command + " ) 2>&1 || true"))
 
 
+def wait_for_unit(name):
+    try:
+        machine.wait_for_unit(name)
+    except Exception:
+        _notes.append(f"journal of {name} (the unit did not come up):")
+        _notes.append(
+            machine.execute(f"journalctl -u {name} --no-pager -n 60 | cut -c1-300")[1]
+        )
+        raise
+
+
 def _report():
     for note in _notes:
         print(note)
@@ -43,21 +54,21 @@ atexit.register(_report)
 
 start_all()
 
-machine.wait_for_unit("multi-user.target")
+wait_for_unit("multi-user.target")
 phase("multi-user.target")
-machine.wait_for_unit("docker.service")
+wait_for_unit("docker.service")
 phase("docker.service")
-machine.wait_for_unit("immich-stack.service")
+wait_for_unit("immich-stack.service")
 phase("immich-stack.service")
-machine.wait_for_unit("authentik-stack.service")
+wait_for_unit("authentik-stack.service")
 phase("authentik-stack.service")
-machine.wait_for_unit("caddy.service")
-machine.wait_for_unit("forgejo.service")
-machine.wait_for_unit("vaultwarden.service")
-machine.wait_for_unit("navidrome.service")
-machine.wait_for_unit("actual.service")
-machine.wait_for_unit("beszel-hub.service")
-machine.wait_for_unit("beszel-agent.service")
+wait_for_unit("caddy.service")
+wait_for_unit("forgejo.service")
+wait_for_unit("vaultwarden.service")
+wait_for_unit("navidrome.service")
+wait_for_unit("actual.service")
+wait_for_unit("beszel-hub.service")
+wait_for_unit("beszel-agent.service")
 phase("all units active")
 # Where the boot minutes go: the slowest units and the chain to multi-user.
 measure(
@@ -107,7 +118,7 @@ measure(
 # healthy") — so the asserted run is this restart once the IdP answers, plus
 # an idempotency run from the converged state. The converge-managed env stubs
 # then carry the provisioned runtime state.
-machine.wait_for_unit("caddy-ca-trust.service")
+wait_for_unit("caddy-ca-trust.service")
 machine.wait_until_succeeds(
     "curl --cacert /run/homelab-vm-test/caddy-ca-bundle.crt -fsS https://auth.@internalDomain@/-/health/live/ > /dev/null",
     timeout=900,
