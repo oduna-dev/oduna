@@ -16,6 +16,14 @@ in
           subdomain = "budget";
           port = 5006;
         };
+        backup.dumps = [
+          {
+            file = "actual_account_{date}.sqlite3";
+            type = "sqlite";
+            dataDir = "${cfg.storage.appdataPath}/actual-budget";
+            db = "server-files/account.sqlite";
+          }
+        ];
       };
     }
     (lib.mkIf app.enable {

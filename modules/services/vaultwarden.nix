@@ -17,6 +17,14 @@ in
           subdomain = "vault";
           port = 8080;
         };
+        backup.dumps = [
+          {
+            file = "vaultwarden_{date}.sqlite3";
+            type = "sqlite";
+            inherit dataDir;
+            db = "db.sqlite3";
+          }
+        ];
       };
     }
     (lib.mkIf app.enable {

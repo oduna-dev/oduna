@@ -82,6 +82,98 @@ in
                   '';
                 };
               };
+              backup = {
+                dumps = lib.mkOption {
+                  type = lib.types.listOf (
+                    lib.types.submodule {
+                      options = {
+                        file = lib.mkOption {
+                          type = lib.types.str;
+                          example = "app_{date}.sqlite3";
+                          description = ''
+                            Name of the dump file below the app's directory in
+                            the local backup root; `{date}` is replaced by the
+                            run date.
+                          '';
+                        };
+                        type = lib.mkOption {
+                          type = lib.types.enum [
+                            "sqlite"
+                            "postgres-container"
+                            "command"
+                          ];
+                          description = ''
+                            `sqlite`: consistent copy of a database read from
+                            a ZFS snapshot of the dataset mounted at
+                            `dataDir`. `postgres-container`: logical dump
+                            through `docker exec` into `container`. `command`:
+                            run the executable `exec`, which writes the dump
+                            to the path in `$BACKUP_OUT`.
+                          '';
+                        };
+                        dataDir = lib.mkOption {
+                          type = lib.types.nullOr lib.types.str;
+                          default = null;
+                          description = "sqlite: mountpoint of the dataset holding the database.";
+                        };
+                        db = lib.mkOption {
+                          type = lib.types.nullOr lib.types.str;
+                          default = null;
+                          description = "sqlite: database path relative to `dataDir`.";
+                        };
+                        container = lib.mkOption {
+                          type = lib.types.nullOr lib.types.str;
+                          default = null;
+                          description = "postgres-container: name of the running container.";
+                        };
+                        user = lib.mkOption {
+                          type = lib.types.nullOr lib.types.str;
+                          default = null;
+                          description = ''
+                            postgres-container: database role to connect as.
+                            command: system user to run `exec` as (default
+                            root).
+                          '';
+                        };
+                        database = lib.mkOption {
+                          type = lib.types.nullOr lib.types.str;
+                          default = null;
+                          description = ''
+                            postgres-container: database for a custom-format
+                            `pg_dump`; null dumps the whole cluster with
+                            `pg_dumpall`, gzip-compressed.
+                          '';
+                        };
+                        exec = lib.mkOption {
+                          type = lib.types.nullOr lib.types.str;
+                          default = null;
+                          description = "command: absolute path of the executable.";
+                        };
+                        stopUnits = lib.mkOption {
+                          type = lib.types.listOf lib.types.str;
+                          default = [ ];
+                          description = ''
+                            Systemd units stopped for the duration of this dump
+                            and started again afterwards, also on failure.
+                          '';
+                        };
+                      };
+                    }
+                  );
+                  default = [ ];
+                  description = "Nightly dumps of the app's databases into the local backup root.";
+                };
+                paths = lib.mkOption {
+                  type = lib.types.listOf lib.types.str;
+                  default = [ ];
+                  description = "Bulk data paths of the app that go into the offsite backup.";
+                };
+                exclude = lib.mkOption {
+                  type = lib.types.listOf lib.types.str;
+                  default = [ ];
+                  description = "Paths below `paths` the offsite backup skips.";
+                };
+              };
             };
           }
         )
@@ -244,6 +336,15 @@ in
       };
     };
     backup = {
+      paths = lib.mkOption {
+        type = lib.types.listOf lib.types.str;
+        default = [ ];
+        example = [ "/mnt/tank/storage/users" ];
+        description = ''
+          Instance data outside the apps (personal files, media collections)
+          that goes into the offsite backup next to the apps' own paths.
+        '';
+      };
       storageBoxRepo = lib.mkOption {
         type = lib.types.str;
         default = "";

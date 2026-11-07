@@ -39,6 +39,15 @@ in
           subdomain = "auth";
           port = 9000;
         };
+        backup.dumps = [
+          {
+            file = "authentik_db_{date}.dump";
+            type = "postgres-container";
+            container = "authentik_postgres";
+            user = "authentik";
+            database = "authentik";
+          }
+        ];
       };
     }
     (lib.mkIf cfg.identity.enable {

@@ -16,98 +16,51 @@ let
   hcBorg = config.sops.secrets."healthchecks_borg_uuid".path;
   curlPing = "${pkgs.curl}/bin/curl -fsS -m 10 --retry 3";
 
-  backupScript = pkgs.writeShellScript "backup-databases" ''
-    set -euo pipefail
+  apps = lib.filterAttrs (_: app: app.enable) cfg.apps;
+  backupRoot = "${cfg.storage.bulkPath}/backups";
 
-    backup_root="${cfg.storage.bulkPath}/backups"
-    date="$(date +%F)"
-    ${lib.optionalString cfg.monitoring.healthchecks.enable ''
-      ${curlPing} "$(cat ${hcHotBackup})/start" || true
-      trap '${curlPing} "$(cat ${hcHotBackup})/fail" || true' ERR
-    ''}
+  # Apps whose dumps exec into their compose stack's database container need
+  # that stack up: a missing one would abort the whole nightly job.
+  stackUnits = lib.mapAttrsToList (name: _: "${name}-stack.service") (
+    lib.filterAttrs (_: app: lib.any (dump: dump.type == "postgres-container") app.backup.dumps) apps
+  );
 
-    mkdir -p "$backup_root"
+  # The dump manifest the script iterates over: one entry per dump of every
+  # enabled app.
+  manifest = pkgs.writeText "backup-manifest.json" (
+    builtins.toJSON {
+      retentionDays = 14;
+      dumps = lib.concatLists (
+        lib.mapAttrsToList (app: entry: map (dump: { inherit app; } // dump) entry.backup.dumps) apps
+      );
+    }
+  );
 
-    ${lib.optionalString cfg.apps.vaultwarden.enable ''
-      mkdir -p "$backup_root/vaultwarden"
-      # Vaultwarden: consistent SQLite copy read from a dedicated ZFS snapshot.
-      # A previous run that failed between snapshot and destroy leaves the
-      # snapshot behind, so drop it before creating a fresh one.
-      ${pkgs.zfs}/bin/zfs destroy fast-pool/appdata/vaultwarden@backup-snap 2>/dev/null || true
-      ${pkgs.zfs}/bin/zfs snapshot fast-pool/appdata/vaultwarden@backup-snap
-      ${pkgs.sqlite}/bin/sqlite3 \
-        "file:${cfg.storage.appdataPath}/vaultwarden/.zfs/snapshot/backup-snap/db.sqlite3?mode=ro" \
-        ".backup '$backup_root/vaultwarden/vaultwarden_$date.sqlite3'"
-      ${pkgs.zfs}/bin/zfs destroy fast-pool/appdata/vaultwarden@backup-snap
-    ''}
-
-    ${lib.optionalString cfg.apps.actual-budget.enable ''
-      mkdir -p "$backup_root/actual-budget"
-      # Actual Budget: same snapshot-read pattern.
-      ${pkgs.zfs}/bin/zfs destroy fast-pool/appdata/actual-budget@backup-snap 2>/dev/null || true
-      ${pkgs.zfs}/bin/zfs snapshot fast-pool/appdata/actual-budget@backup-snap
-      ${pkgs.sqlite}/bin/sqlite3 \
-        "file:${cfg.storage.appdataPath}/actual-budget/.zfs/snapshot/backup-snap/server-files/account.sqlite?mode=ro" \
-        ".backup '$backup_root/actual-budget/actual_account_$date.sqlite3'"
-      ${pkgs.zfs}/bin/zfs destroy fast-pool/appdata/actual-budget@backup-snap
-    ''}
-
-    ${lib.optionalString cfg.apps.immich.enable ''
-      mkdir -p "$backup_root/immich"
-      # Immich PostgreSQL: logical dump from the running container.
-      pg_container="$(${pkgs.docker}/bin/docker ps --filter name=postgres --format '{{.Names}}' | grep immich | head -n 1)"
-      ${pkgs.docker}/bin/docker exec -i "$pg_container" pg_dumpall -c --if-exists -U postgres \
-        | ${pkgs.gzip}/bin/gzip > "$backup_root/immich/immich_db_$date.sql.gz"
-    ''}
-
-    ${lib.optionalString cfg.identity.enable ''
-      mkdir -p "$backup_root/authentik"
-      # authentik PostgreSQL: logical dump of the dedicated role's database
-      # from the stack's own PostgreSQL container.
-        ${pkgs.docker}/bin/docker exec authentik_postgres \
-          pg_dump --format=custom -U authentik authentik \
-          > "$backup_root/authentik/authentik_db_$date.dump"
-    ''}
-
-    ${lib.optionalString cfg.apps.forgejo.enable ''
-      mkdir -p "$backup_root/forgejo"
-      # Forgejo: stop the service for a consistent repository dump. The EXIT
-      # trap brings it back up even when the dump fails; the success path clears
-      # it after the restart.
-      ${pkgs.systemd}/bin/systemctl stop forgejo
-      trap '${pkgs.systemd}/bin/systemctl start forgejo' EXIT
-      ${pkgs.util-linux}/bin/runuser -u forgejo -- \
-        env FORGEJO_WORK_DIR="${cfg.storage.appdataPath}/forgejo" \
-        ${pkgs.forgejo}/bin/forgejo dump \
-          -c "${cfg.storage.appdataPath}/forgejo/custom/conf/app.ini" \
-          -f /tmp/forgejo-dump.zip
-      ${pkgs.systemd}/bin/systemctl start forgejo
-      trap - EXIT
-      mv /tmp/forgejo-dump.zip "$backup_root/forgejo/forgejo_dump_$date.zip"
-    ''}
-
-    # Retain 14 days locally; offsite retention is governed by Borg.
-    find "$backup_root" -type f -mtime +14 -delete
-
-    ${lib.optionalString cfg.monitoring.healthchecks.enable ''
-      ${curlPing} "$(cat ${hcHotBackup})" || true
-    ''}
-  '';
+  backupScript = pkgs.writeShellApplication {
+    name = "backup-databases";
+    runtimeInputs = with pkgs; [
+      coreutils
+      curl
+      docker
+      findutils
+      gzip
+      jq
+      sqlite
+      systemd
+      util-linux
+      zfs
+    ];
+    text = builtins.readFile ./backups/backup-databases.sh;
+  };
 in
 {
   services.borgbackup.jobs.storagebox = lib.mkIf (cfg.backup.storageBoxRepo != "") {
     paths = [
-      "${cfg.storage.bulkPath}/backups"
-      "${cfg.storage.bulkPath}/storage/users"
-      "${cfg.storage.bulkPath}/immich"
-      "${cfg.storage.bulkPath}/media/music"
-      "${cfg.storage.bulkPath}/media/home-videos"
-    ];
-    exclude = [
-      "${cfg.storage.bulkPath}/immich/thumbs"
-      "${cfg.storage.bulkPath}/immich/encoded-video"
-      "${cfg.storage.bulkPath}/immich/backups"
-    ];
+      backupRoot
+    ]
+    ++ lib.concatMap (app: app.backup.paths) (lib.attrValues apps)
+    ++ cfg.backup.paths;
+    exclude = lib.concatMap (app: app.backup.exclude) (lib.attrValues apps);
     repo = cfg.backup.storageBoxRepo;
     encryption = {
       mode = "repokey-blake2";
@@ -133,14 +86,16 @@ in
       "docker.service"
       "zfs-mount.service"
     ]
-    ++ lib.optionals cfg.apps.immich.enable [ "immich-stack.service" ]
-    ++ lib.optionals cfg.identity.enable [ "authentik-stack.service" ];
-    requires =
-      lib.optionals cfg.apps.immich.enable [ "immich-stack.service" ]
-      ++ lib.optionals cfg.identity.enable [ "authentik-stack.service" ];
+    ++ stackUnits;
+    requires = stackUnits;
+    environment = {
+      BACKUP_MANIFEST = "${manifest}";
+      BACKUP_ROOT = backupRoot;
+    }
+    // lib.optionalAttrs cfg.monitoring.healthchecks.enable { HC_URL_FILE = hcHotBackup; };
     serviceConfig = {
       Type = "oneshot";
-      ExecStart = backupScript;
+      ExecStart = lib.getExe backupScript;
     };
   };
 

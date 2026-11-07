@@ -14,6 +14,16 @@
 let
   cfg = config.homelab;
   app = cfg.apps.forgejo;
+  stateDir = "${cfg.storage.appdataPath}/forgejo";
+  dump = pkgs.writeShellApplication {
+    name = "forgejo-dump";
+    runtimeInputs = [ config.services.forgejo.package ];
+    runtimeEnv = {
+      FORGEJO_WORK_DIR = stateDir;
+      FORGEJO_CONFIG = "${stateDir}/custom/conf/app.ini";
+    };
+    text = builtins.readFile ./forgejo/dump.sh;
+  };
 in
 {
   config = lib.mkMerge [
@@ -24,12 +34,22 @@ in
           subdomain = "git";
           port = 3000;
         };
+        # A consistent repository dump needs the service stopped.
+        backup.dumps = [
+          {
+            file = "forgejo_dump_{date}.zip";
+            type = "command";
+            exec = lib.getExe dump;
+            user = "forgejo";
+            stopUnits = [ "forgejo.service" ];
+          }
+        ];
       };
     }
     (lib.mkIf app.enable {
       services.forgejo = {
         enable = true;
-        stateDir = "${cfg.storage.appdataPath}/forgejo";
+        inherit stateDir;
         database.type = "sqlite3";
         settings = {
           server = {
