@@ -23,6 +23,18 @@ if [ "${#nix_files[@]}" -gt 0 ]; then
   deadnix --fail -l -- "${nix_files[@]}"
 fi
 
+# No logic in Nix strings: a multi-line shell body belongs in a script file
+# (packaged with writeShellApplication or read with builtins.readFile). The
+# generated Caddyfile is the one multi-line string of another kind.
+if [ "${#nix_files[@]}" -gt 0 ]; then
+  inline_shell="$(grep -nE "(^|[^A-Za-z])(script|preStart|postStart|preStop|postStop|preHook|postHook|text|ExecStart(Pre|Post|Stop)?)[[:space:]]*=[[:space:]]*(with [A-Za-z.]+;[[:space:]]*)?''[[:space:]]*$|writeShell(Script|ScriptBin)[^=]*''[[:space:]]*$" "${nix_files[@]}" || true)"
+  if [ -n "$inline_shell" ]; then
+    echo "error: multi-line shell in Nix strings; move it to a script file:" >&2
+    echo "$inline_shell" >&2
+    exit 1
+  fi
+fi
+
 mapfile -t doc_files < <(git ls-files -co --exclude-standard '*.md' '*.yml' '*.yaml' | grep -v '/secrets/')
 if [ "${#doc_files[@]}" -gt 0 ]; then
   prettier --check "${doc_files[@]}"

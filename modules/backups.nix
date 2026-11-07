@@ -14,7 +14,11 @@ let
   # run time; the host gates them via homelab.monitoring.healthchecks.enable.
   hcHotBackup = config.sops.secrets."healthchecks_hotbackup_uuid".path;
   hcBorg = config.sops.secrets."healthchecks_borg_uuid".path;
-  curlPing = "${pkgs.curl}/bin/curl -fsS -m 10 --retry 3";
+  borgPing = pkgs.writeShellApplication {
+    name = "borg-ping";
+    runtimeInputs = [ pkgs.curl ];
+    text = builtins.readFile ./backups/borg-ping.sh;
+  };
 
   apps = lib.filterAttrs (_: app: app.enable) cfg.apps;
   backupRoot = "${cfg.storage.bulkPath}/backups";
@@ -71,10 +75,7 @@ in
     };
     compression = "zstd";
     startAt = "*-*-* 03:30:00";
-    postHook = lib.optionalString cfg.monitoring.healthchecks.enable ''
-      ${curlPing} "$(cat ${hcBorg})$([ "$EXIT_STATUS" -eq 0 ] || printf /fail)" \
-        || true
-    '';
+    postHook = lib.optionalString cfg.monitoring.healthchecks.enable "${lib.getExe borgPing} ${hcBorg} \"$EXIT_STATUS\"";
   };
 
   systemd.services.backup-databases = {
