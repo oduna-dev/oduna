@@ -149,6 +149,11 @@ fi
 # Evaluate the complete system configuration before touching any disks.
 nix build --dry-run "$repo_root#$host"
 
+# --- Stale mesh peers -------------------------------------------------------
+
+# After the WIPE gate: the old install of this host is about to disappear.
+remove_stale_netbird_peers "$host" "$repo_root"
+
 # --- Provision --------------------------------------------------------------
 
 # The live ISO needs the ZFS keys before disko creates the pools; the same
