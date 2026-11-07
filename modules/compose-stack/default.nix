@@ -48,7 +48,7 @@ in
     ];
     environment = {
       STACK_DIR = dir;
-      STACK_COMPOSE_FILE = toString composeFile;
+      STACK_COMPOSE_FILE = "${composeFile}";
       SECRETS_ENV = toString secretsEnv;
       EXTRA_ENV = toString envFile;
     };
