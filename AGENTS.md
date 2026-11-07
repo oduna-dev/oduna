@@ -8,11 +8,13 @@ consume `nixosModules.default`; this repository never contains instance data.
   profile; add `/nix/var/nix/profiles/default/bin` to `PATH` before invoking
   `nix`.
 - **Lint after every change.** Run `nix run .#lint` (gitleaks, nixfmt check,
-  deadnix, Prettier, markdownlint, shellcheck on every shell shebang file) and
-  fix every finding; format Nix files with `nix fmt` (nixfmt RFC style).
+  deadnix, Prettier, markdownlint, shellcheck on every shell shebang file, and a
+  check that fails on multi-line shell in Nix strings) and fix every finding;
+  format Nix files with `nix fmt` (nixfmt RFC style).
 - **No instance data.** Domains, host names, accounts, disk IDs, keys and e-mail
   addresses belong to instances. Examples use `example.org` and the demo
-  instance under `examples/demo/`.
+  instance under `examples/demo/`. Comments and docs do not name the first
+  instance either.
 - **Schema.** Global parameters go through the typed `options.homelab` schema in
   `modules/homelab.nix`; service modules never hardcode them.
 - **Secrets.** Only the plaintext template `secrets/secrets.example.yaml` lives
@@ -20,7 +22,9 @@ consume `nixosModules.default`; this repository never contains instance data.
 - **No logic in Nix strings.** Host-side scripts are files with a shebang next
   to their module, packaged with `pkgs.writeShellApplication` or read with
   `builtins.readFile`; parameters reach them through the environment or
-  arguments, never through Nix interpolation into script text.
+  arguments, never through Nix interpolation into script text. The lint enforces
+  this for shell bodies; the generated Caddyfile is the one multi-line string it
+  leaves alone.
 - **Git workflow.** One branch per task, one PR into `main`. Rebase instead of
   squashing: keep the branch rebased on its base (`main`, or the parent branch
   of a stacked PR) with `git rebase`, and merge with "Rebase and merge"; never
@@ -35,6 +39,23 @@ consume `nixosModules.default`; this repository never contains instance data.
   with `--force-with-lease`; never force-push `main` or a branch someone else
   works on. Rebase merging gives the commits new hashes, so instances pin the
   commit on `main` after the merge, not the PR head.
+- **Store paths in units.** A unit environment variable that names a file of
+  this repository is interpolated (`"${./compose.yml}"`), never passed through
+  `toString`: that drops the Nix dependency, the file is missing from the system
+  closure and the unit fails only at run time. Script variables must not share a
+  name with variables the wrapped tool reads itself (`COMPOSE_*`, `BORG_*`).
+- **Evaluation is not the runtime check.** Lint and evaluation cannot see
+  closure or run-time problems; the VM test is the gate for changes to units and
+  scripts, and it runs only on GitHub Actions (no KVM in the cloud container).
+  Before naming the cause of a red check, read the failing log lines.
+- **Merging.** Read the PR head from the API and pass it as `expectedHeadSha`,
+  never a hash typed from memory. Merge only when CI is green on that head and
+  the review has run; the review bot can push to a branch despite its prompt, so
+  check the head again right before merging.
+- **Pushing.** Run the lint before every push. A push to a PR cancels the
+  running VM test and restarts it, so batch the fixes of a round into one push.
+- **PR descriptions.** Sections What, Behavior, Verified and Not verified: say
+  plainly what was checked and what was not.
 - **English only.** Code comments, docs, commit and PR messages.
 - **Comment and docs discipline.** State current facts, not history (no
   changelog in comments). Document the surprising, not the obvious. One
