@@ -21,6 +21,18 @@ consume `nixosModules.default`; this repository never contains instance data.
   to their module, packaged with `pkgs.writeShellApplication` or read with
   `builtins.readFile`; parameters reach them through the environment or
   arguments, never through Nix interpolation into script text.
+- **Git workflow.** One branch per task, one PR into `main`. Rebase instead of
+  squashing: keep the branch rebased on its base (`main`, or the parent branch
+  of a stacked PR) with `git rebase`, and merge with "Rebase and merge"; never
+  squash and never create merge commits. Commits land in `main` one by one, so
+  each one is a self-contained change that passes the lint with a message that
+  says why; tidy a branch (amend, fixup, reorder) before it is merged. A stacked
+  PR targets its parent's branch; after the parent has merged, rebase the child
+  onto `main` (`git rebase --onto main <parent-branch>`, Git drops the commits
+  that are already in `main`) and retarget the PR. After a rebase, push your own
+  PR branch with `--force-with-lease`; never force-push `main` or a branch
+  someone else works on. Rebase merging gives the commits new hashes, so
+  instances pin the commit on `main` after the merge, not the PR head.
 - **English only.** Code comments, docs, commit and PR messages.
 - **Comment and docs discipline.** State current facts, not history (no
   changelog in comments). Document the surprising, not the obvious. One
