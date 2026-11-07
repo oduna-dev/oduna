@@ -48,6 +48,10 @@ if [ "$list_only" = 1 ]; then
   exec borg-job-storagebox list --short
 fi
 
+# Progress lines carry the seconds since the start: a restore on real hardware
+# shows which step takes the time.
+note() { printf '[%ss] %s\n' "$SECONDS" "$*"; }
+
 manifest() { jq -r "$@" "$BACKUP_MANIFEST"; }
 backup_root="$(manifest .backupRoot)"
 
@@ -113,6 +117,8 @@ while IFS= read -r dump; do
   done < <(jq -r '.restore.stopUnits[]?' <<<"$dump")
 done < <(selected)
 
+note "services stopped"
+
 # --- fetch ----------------------------------------------------------------------
 
 if [ "$fetch" = 1 ]; then
@@ -125,6 +131,7 @@ if [ "$fetch" = 1 ]; then
   # Archive paths are absolute without the leading slash: extracting from /
   # puts files back where they were.
   (cd / && borg-job-storagebox extract "::$archive" "${patterns[@]}")
+  note "fetched $archive"
 fi
 
 # --- restore by type ------------------------------------------------------------
@@ -162,7 +169,7 @@ restore_postgres() {
     # expected and not fatal.
     gunzip -c "$file" | docker exec -i "$container" psql -U "$user" >/dev/null
   fi
-  echo "$app: database restored"
+  note "$app: database restored"
 }
 
 restore_command() {
@@ -187,7 +194,7 @@ while IFS= read -r dump; do
     echo "$app: no dump in $backup_root/$app" >&2
     exit 1
   }
-  echo "$app: restoring $file"
+  note "$app: restoring $file"
   case "$(jq -r .type <<<"$dump")" in
     sqlite) restore_sqlite "$dump" "$file" ;;
     postgres-container) restore_postgres "$dump" "$file" ;;
@@ -199,4 +206,4 @@ while IFS= read -r dump; do
   esac
 done < <(selected)
 
-echo "restore finished; the stopped units and containers start now"
+note "restore finished; the stopped units and containers start now"
