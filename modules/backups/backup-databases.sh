@@ -63,18 +63,19 @@ dump_postgres() {
 }
 
 # The executable writes the dump to $BACKUP_OUT inside a private directory
-# that is handed to its user.
+# that is handed to its user. The file keeps its final name, because some
+# tools derive the format or an extension from it.
 dump_command() {
   local exec=$1 user=$2 out=$3 dir
   dir="$(mktemp -d)"
   tmp_dirs+=("$dir")
   if [ -n "$user" ]; then
     chown "$user" "$dir"
-    runuser -u "$user" -- env BACKUP_OUT="$dir/dump" "$exec"
+    runuser -u "$user" -- env BACKUP_OUT="$dir/$(basename "$out")" "$exec"
   else
-    BACKUP_OUT="$dir/dump" "$exec"
+    BACKUP_OUT="$dir/$(basename "$out")" "$exec"
   fi
-  mv "$dir/dump" "$out"
+  mv "$dir/$(basename "$out")" "$out"
 }
 
 trap cleanup EXIT
