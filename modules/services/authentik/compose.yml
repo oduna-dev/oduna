@@ -1,0 +1,129 @@
+# Authentik stack, based on the upstream compose file of the pinned release
+# (2026.8.5, lifecycle/container/compose.yml) with the homelab adaptations:
+# no Redis (the cache, channel layer and background tasks are PostgreSQL-
+# based), no docker socket on the worker (outposts are
+# deployed as containers on this host, not discovered via a service
+# connection) and no custom template directory. The stock outpost container
+# runs on the host network so Caddy keeps fronting the Navidrome forward-auth
+# gate at 127.0.0.1:9001.
+#
+# Data locations are hardcoded bind mounts: the PostgreSQL directory and the
+# shared media/data directories live on the appdata/authentik dataset. Stack
+# secrets come from the sops-managed .env file installed next to this compose
+# file; schema-resolved plaintext entries are appended to it (see
+# modules/services/authentik.nix).
+# Image digests: `docker manifest inspect <image>` for the pinned tag.
+name: authentik
+
+services:
+  postgres:
+    container_name: authentik_postgres
+    image: docker.io/library/postgres:16-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab
+    environment:
+      POSTGRES_DB: authentik
+      POSTGRES_USER: authentik
+      POSTGRES_PASSWORD: ${AUTHENTIK_PG_PASSWORD:?database password required}
+    volumes:
+      - /mnt/fast-pool/appdata/authentik/postgres:/var/lib/postgresql/data
+    healthcheck:
+      interval: 30s
+      retries: 5
+      start_period: 20s
+      test:
+        - CMD-SHELL
+        - pg_isready -d $${POSTGRES_DB} -U $${POSTGRES_USER}
+      timeout: 5s
+    restart: unless-stopped
+
+  server:
+    container_name: authentik_server
+    image: ghcr.io/goauthentik/server:2026.8.5@sha256:602227a86455d6772e3d16b7d852713c4f864f40df5df894abd1285bb53979a5
+    command: server
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      # The bootstrap stage generates the key under its historic bare name.
+      AUTHENTIK_SECRET_KEY: ${SECRET_KEY:?secret key required}
+      AUTHENTIK_POSTGRESQL__HOST: postgres
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD:
+        ${AUTHENTIK_PG_PASSWORD:?database password required}
+      # Flow backgrounds and similar live on the dataset, shared with the
+      # worker (worker downloads geoip updates into the data directory below).
+      AUTHENTIK_STORAGE__FILE__PATH: /media
+      AUTHENTIK_OUTPOSTS__DISCOVER: "false"
+      AUTHENTIK_DISABLE_UPDATE_CHECK: "true"
+      AUTHENTIK_DISABLE_STARTUP_ANALYTICS: "true"
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+    ports:
+      # TLS terminates at the Caddy wildcard vhost, so only the HTTP listener
+      # is published; the container's self-signed HTTPS listener stays unused.
+      - "127.0.0.1:9000:9000"
+    # Same shared-memory sizing as the upstream compose file.
+    shm_size: 512mb
+    volumes:
+      - /mnt/fast-pool/appdata/authentik/media:/media
+      - /mnt/fast-pool/appdata/authentik/data:/data
+    restart: unless-stopped
+
+  worker:
+    container_name: authentik_worker
+    image: ghcr.io/goauthentik/server:2026.8.5@sha256:602227a86455d6772e3d16b7d852713c4f864f40df5df894abd1285bb53979a5
+    command: worker
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      AUTHENTIK_SECRET_KEY: ${SECRET_KEY:?secret key required}
+      AUTHENTIK_POSTGRESQL__HOST: postgres
+      AUTHENTIK_POSTGRESQL__NAME: authentik
+      AUTHENTIK_POSTGRESQL__USER: authentik
+      AUTHENTIK_POSTGRESQL__PASSWORD:
+        ${AUTHENTIK_PG_PASSWORD:?database password required}
+      AUTHENTIK_STORAGE__FILE__PATH: /media
+      AUTHENTIK_OUTPOSTS__DISCOVER: "false"
+      AUTHENTIK_DISABLE_UPDATE_CHECK: "true"
+      AUTHENTIK_DISABLE_STARTUP_ANALYTICS: "true"
+      AUTHENTIK_ERROR_REPORTING__ENABLED: "false"
+    # Same shared-memory sizing as the upstream compose file.
+    shm_size: 512mb
+    volumes:
+      - /mnt/fast-pool/appdata/authentik/media:/media
+      - /mnt/fast-pool/appdata/authentik/data:/data
+    restart: unless-stopped
+
+  outpost:
+    container_name: authentik_outpost
+    image: ghcr.io/goauthentik/proxy:2026.8.5@sha256:34640cf41e009ab052d4b9119cea816713adcd1eaac95de6caefebfe86d3fcd9
+    network_mode: host
+    env_file:
+      - .env
+      # The outpost token: homelab-converge writes AUTHENTIK_TOKEN here after
+      # provisioning (modules/services/authentik.nix stubs the file ahead of
+      # the first container start; until then the container exits and
+      # restarts without affecting the server).
+      - outpost.env
+    environment:
+      # Loopback-only listeners; 127.0.0.1:9001 is the Caddy forward-auth
+      # endpoint, 9302 is the outpost ping the checks script probes.
+      AUTHENTIK_LISTEN__HTTP: 127.0.0.1:9001
+      AUTHENTIK_LISTEN__HTTPS: 127.0.0.1:9444
+      AUTHENTIK_LISTEN__METRICS: 127.0.0.1:9302
+      # The IdP API/websocket traffic must ride the real vhost scheme (https);
+      # an AUTHENTIK_INSECURE toggle flips the websocket to an unencrypted
+      # scheme that the vhost never answers. Certificate trust comes from the
+      # host CA bundle below (the issuer vhost uses public TLS in the normal
+      # deployment and Caddy's internal CA in the VM test profile). The
+      # mount target is what the TLS stack reads: SSL_CERT_FILE must point
+      # inside the container.
+      AUTHENTIK_INSECURE: "false"
+      SSL_CERT_FILE: /etc/ssl/certs/ca-certificates.crt
+    volumes:
+      - ${AUTHENTIK_OUTPOST_CA_BUNDLE:-/etc/ssl/certs/ca-certificates.crt}:/etc/ssl/certs/ca-certificates.crt:ro
+    restart: unless-stopped
