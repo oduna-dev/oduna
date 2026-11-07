@@ -58,7 +58,7 @@ jobs:
         continue-on-error: true
         timeout-minutes: 15
         with:
-          model: opencode-go/kimi-k2.7-code
+          model: opencode/beam-free
           prompt: |
             Review this pull request.
 
@@ -124,7 +124,7 @@ jobs:
         continue-on-error: true
         timeout-minutes: 15
         with:
-          model: opencode-go/kimi-k2.7-code
+          model: opencode/beam-free
           mentions: /opencode-review
           prompt: |
             Review this pull request.
