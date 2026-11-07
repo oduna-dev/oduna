@@ -1,0 +1,38 @@
+version: 2
+
+updates:
+  # flake.lock (nixpkgs and other flake inputs)
+  - package-ecosystem: nix
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      flake-inputs:
+        patterns: ["*"]
+
+  # Container images pinned in the Compose stacks. Images of one stack share a
+  # version and have to move together.
+  - package-ecosystem: docker-compose
+    directory: /modules/immich
+    schedule:
+      interval: weekly
+    groups:
+      immich:
+        patterns: ["ghcr.io/immich-app/*"]
+
+  - package-ecosystem: docker-compose
+    directory: /modules/services/authentik
+    schedule:
+      interval: weekly
+    groups:
+      authentik:
+        patterns: ["ghcr.io/goauthentik/*"]
+
+  # Actions used in .github/workflows
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
