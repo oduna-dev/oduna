@@ -48,10 +48,11 @@ consume `nixosModules.default`; this repository never contains instance data.
   closure or run-time problems; the VM test is the gate for changes to units and
   scripts, and it runs only on GitHub Actions (no KVM in the cloud container).
   Before naming the cause of a red check, read the failing log lines.
-- **Merging.** Read the PR head from the API and pass it as `expectedHeadSha`,
-  never a hash typed from memory. Merge only when CI is green on that head and
-  the review has run; the review bot can push to a branch despite its prompt, so
-  check the head again right before merging.
+- **Merging.** Read the PR head from the API and pass it as the expected head of
+  the merge call (`sha` in the REST API, `expectedHeadSha` in the GitHub MCP
+  tool), never a hash typed from memory. Merge only when CI is green on that
+  head and the review has run; the review bot can push to a branch despite its
+  prompt, so check the head again right before merging.
 - **Pushing.** Run the lint before every push. A push to a PR cancels the
   running VM test and restarts it, so batch the fixes of a round into one push.
 - **PR descriptions.** Sections What, Behavior, Verified and Not verified: say
