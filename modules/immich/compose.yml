@@ -8,7 +8,7 @@ name: immich
 services:
   immich-server:
     container_name: immich_server
-    image: ghcr.io/immich-app/immich-server:v3.3.3
+    image: ghcr.io/immich-app/immich-server:v3.3.6
     volumes:
       - /mnt/tank/immich:/data
       - /etc/localtime:/etc/localtime:ro
