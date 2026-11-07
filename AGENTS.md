@@ -6,7 +6,8 @@ consume `nixosModules.default`; this repository never contains instance data.
 
 - **Nix in non-interactive shells.** The agent shell may not source the user's
   profile; add `/nix/var/nix/profiles/default/bin` to `PATH` before invoking
-  `nix`.
+  `nix`. Cloud sessions get this from `tools/cloud-setup.sh`, the setup script
+  of the cloud environment.
 - **Lint after every change.** Run `nix run .#lint` (gitleaks, nixfmt check,
   deadnix, Prettier, markdownlint, shellcheck on every shell shebang file, and a
   check that fails on multi-line shell in Nix strings) and fix every finding;
