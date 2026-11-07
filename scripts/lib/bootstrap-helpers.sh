@@ -222,6 +222,28 @@ apply_preseed_values() {
   fi
 }
 
+# Removes the NetBird peers of an earlier install of this host. Each install
+# enrolls a new peer; while the old one still owns the host name, the new peer
+# gets a suffixed name (`<name>-26-128`) and the mesh DNS records that point at
+# `<name>.netbird.cloud` keep resolving to the dead peer. The target is wiped
+# right after this step, so its old peer is stale by definition.
+remove_stale_netbird_peers() {
+  local host="$1" repo_root="$2" api name peers ids id
+  api="${NETBIRD_API_URL:-https://api.netbird.io}"
+  name="$(nix eval --raw "$repo_root#nixosConfigurations.${host}.config.networking.hostName")"
+  peers="$(curl -fsS "$api/api/peers" -H 'Accept: application/json' \
+    -H "Authorization: Token ${NETBIRD_API_TOKEN}")" \
+    || { echo "netbird: listing peers failed" >&2; return 1; }
+  ids="$(printf '%s' "$peers" | nix shell nixpkgs#jq -c jq -r --arg n "$name" \
+    '.[] | select(.hostname == $n or .name == $n) | .id')"
+  for id in $ids; do
+    curl -fsS -X DELETE "$api/api/peers/$id" \
+      -H "Authorization: Token ${NETBIRD_API_TOKEN}" >/dev/null \
+      || { echo "netbird: deleting peer $id failed" >&2; return 1; }
+    echo "netbird: removed stale peer $id ($name)"
+  done
+}
+
 # Fills the values that come from provider APIs. Stage-1-only providers: the
 # NetBird setup key and the three Healthchecks checks (created when missing;
 # the Borg check is paused right away while the Borg job is disabled). Skips
