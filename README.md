@@ -99,6 +99,9 @@ nix fmt           # format Nix files
 nix build .#checks.x86_64-linux.vm-test   # boot test of the demo instance (needs KVM)
 ```
 
+Work happens on one branch per task and goes into `main` through a pull request
+that is rebased, not squashed; the rules are in [AGENTS.md](AGENTS.md).
+
 To try unreleased changes against an instance, point its input at a local
 checkout from the instance directory:
 
