@@ -87,60 +87,47 @@ ssh root@<ip> cat /etc/ssh/borg_append_only_key.pub \
   | ssh -p 23 <storagebox-user>@<storagebox-user>.your-storagebox.de install-ssh-key
 ```
 
-## 2. Fetch the data from Borg (unverified)
+## 2. Restore with `homelab-restore`
 
-On the new host, as root, stop the stacks and services first so nothing writes
-while files come back:
+`homelab-restore` is installed on every host and driven by the same manifest as
+the nightly job. As root on the new host, after the Borg key is authorised:
 
 ```sh
-systemctl stop vaultwarden actual forgejo immich-stack authentik-stack
-export BORG_PASSCOMMAND='cat /run/secrets/borg_passphrase'
-export BORG_RSH='ssh -i /etc/ssh/borg_append_only_key -p 23'
-repo=<the storageBoxRepo URL of the host config>
-borg list "$repo"
-cd / && borg extract --dry-run --list "$repo::<archive>"   # inspect first
-cd / && borg extract "$repo::<archive>"
+homelab-restore --list             # archives of the offsite repository
+homelab-restore                    # prints the plan, changes nothing
+homelab-restore --yes              # newest archive, every app
+homelab-restore --yes vaultwarden  # or only some apps
 ```
 
-Archive paths are absolute without the leading slash, so extracting from `/`
-puts files back where they were. Check ownership afterwards: Vaultwarden files
-belong to `vaultwarden`, Actual files to `actual`.
+It stops the units and containers that write, runs `borg extract` for the backup
+root and the selected apps' paths, restores every dump by its type and starts
+what it stopped. `--archive NAME` picks an archive, `--no-fetch` uses the dumps
+and files already on the host. The VM test runs this path against a local Borg
+repository for Immich, Forgejo, Vaultwarden, Actual Budget and Authentik; on
+real hardware it is **unverified**.
 
-## 3. Restore the dumps (unverified)
+How each type is restored:
 
-The dumps are in `<bulkPath>/backups/<app>/`. Per app:
+- **sqlite** (Vaultwarden, Actual): the dump replaces the database file, stale
+  `-wal` and `-shm` files are removed, and the file takes the owner of the
+  directory that holds it.
+- **postgres-container** (Immich, Authentik): the stack unit is started, the
+  declared server containers are stopped, then `psql` replays the `pg_dumpall`
+  dump (Immich) or `pg_restore --clean --if-exists` loads the custom-format dump
+  (Authentik). The `pg_dumpall` replay prints an expected error for the
+  connected role.
+- **command** (Forgejo): the app's restore executable unpacks the dump, puts the
+  repositories and data directory back, rebuilds the SQLite database from the
+  SQL script and regenerates the repository hooks.
 
-- **Vaultwarden:** copy the SQLite dump over `<appdata>/vaultwarden/db.sqlite3`,
-  remove stale `db.sqlite3-wal` and `-shm`, `chown vaultwarden:vaultwarden`.
-- **Actual:** copy the dump over
-  `<appdata>/actual-budget/server-files/account.sqlite`, `chown actual:actual`.
-- **Immich:** start `immich-stack` with the server stopped
-  (`docker stop immich_server`), then restore the dump, which drops and
-  recreates objects (`pg_dumpall -c --if-exists`):
+Instance paths (`homelab.backup.paths`) are not part of an app and come back
+only with a manual extract:
 
-  ```sh
-  gunzip -c immich_db_<date>.sql.gz \
-    | docker exec -i immich_postgres psql -U postgres
-  ```
+```sh
+cd / && borg-job-storagebox extract "::<archive>" <path-without-leading-slash>
+```
 
-- **Authentik:** start `authentik-stack`, stop `authentik_server` and
-  `authentik_worker`, restore, then start them again:
-
-  ```sh
-  docker exec -i authentik_postgres pg_restore --clean --if-exists \
-    -U authentik -d authentik < authentik_db_<date>.dump
-  ```
-
-- **Forgejo:** the archive from `forgejo dump` holds the repositories, the data
-  directory and the database (an SQL file for SQLite). Unpack it, put the
-  repositories and data back under `<appdata>/forgejo`, import the SQL into the
-  SQLite database, `chown -R forgejo:forgejo`. The exact layout is the first
-  thing the drill has to confirm.
-
-Then start everything: `systemctl start vaultwarden actual forgejo` and the
-stacks.
-
-## 4. Converge and verify
+## 3. Converge and verify
 
 ```sh
 systemctl restart homelab-converge.service
@@ -154,8 +141,8 @@ in to every app through the IdP.
 
 ## Known gaps
 
-- There is no restore tooling; sections 2 and 3 are manual. The first drill
-  decides which of them become a script driven by the backup manifest.
+- `homelab-restore` has run only in the VM test; the first real drill confirms
+  or corrects it, most of all the Forgejo dump layout.
 - The Borg job reads live files for the app paths (Actual budget files,
   Vaultwarden attachments). A snapshot-based read would make them consistent.
 - A reinstall always creates new identities. Reusing the escrowed Borg key would
