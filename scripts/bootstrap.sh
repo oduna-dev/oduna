@@ -5,6 +5,9 @@
 #
 # Usage: bootstrap.sh <host> root@<live-ip>
 #
+# The instance's .sops.yaml carries the host's age key as a `- &<host> <key>`
+# entry, which this script fills in.
+#
 # Run from the instance directory (or set ODUNA_INSTANCE) on the workstation
 # with Nix installed. The target must be booted into
 # the NixOS minimal ISO with root SSH reachable (set a temporary root password
@@ -69,7 +72,7 @@ install -d -m 700 "$staging/etc/ssh"
 # Host SSH identity: kept identical across reinstalls; its public key derives
 # the age key that decrypts the sops secrets at boot.
 ssh-keygen -t ed25519 -N "" -C "$host" -f "$staging/etc/ssh/ssh_host_ed25519_key"
-nas_age_key="$(nix run nixpkgs#ssh-to-age -- < "$staging/etc/ssh/ssh_host_ed25519_key.pub")"
+host_age_key="$(nix run nixpkgs#ssh-to-age -- < "$staging/etc/ssh/ssh_host_ed25519_key.pub")"
 
 # Dedicated key for the append-only Borg repository on the StorageBox; add its
 # public key as the StorageBox forced-command key (borg serve --append-only).
@@ -100,16 +103,16 @@ fi
 
 # --- Secrets ----------------------------------------------------------------
 
-# Every run generates a fresh host key, so the &nas key must be re-written
+# Every run generates a fresh host key, so the &<host> key must be re-written
 # each time; leaving a stale key in place would leave the installed host
 # unable to decrypt the secrets at boot. A missing or empty file (truncated
 # in preparation for a from-scratch rebuild) triggers a full re-materialization
 # from the example template + pre-seed instead of re-keying.
-if ! grep -q -- '- &nas' .sops.yaml; then
-  echo ".sops.yaml is missing the '&nas' age key entry" >&2
+if ! grep -qF -- "- &$host " .sops.yaml; then
+  echo ".sops.yaml is missing the '&$host' age key entry" >&2
   exit 1
 fi
-sed -i "s|\(- &nas \).*|\1$nas_age_key|" .sops.yaml
+sed -i "s|\(- &$host \).*|\1$host_age_key|" .sops.yaml
 
 if [ ! -s secrets/secrets.yaml ]; then
 

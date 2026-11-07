@@ -67,7 +67,7 @@ idp_chain() {
       echo "group:$1: present"
     fi
   }
-  ensure_group family
+  ensure_group "$IDP_USER_GROUP"
   ensure_group admins
 
   # Shared scope mapping: authentik's default email scope returns

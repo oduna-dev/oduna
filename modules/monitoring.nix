@@ -45,7 +45,7 @@ in
   };
 
   # External liveness: if this ping stops arriving (power loss, kernel panic,
-  # ISP failure), Healthchecks.io alerts the family mailbox.
+  # ISP failure), Healthchecks.io alerts the alert mailbox.
   systemd.services.healthchecks-heartbeat = lib.mkIf cfg.monitoring.healthchecks.enable {
     description = "Healthchecks.io host liveness heartbeat ping";
     environment.HC_URL_FILE = config.sops.secrets."healthchecks_heartbeat_uuid".path;

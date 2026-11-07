@@ -1,4 +1,4 @@
-# sops-nix wiring: secrets are encrypted with age keys (workstation + NAS host
+# sops-nix wiring: secrets are encrypted with age keys (workstation + host
 # key) and decrypted at boot into /run/secrets. The encrypted document and the
 # decryption key are parameters (`homelab.secrets.sopsFile`,
 # `homelab.secrets.ageKeyFile`); the physical host derives its age key from

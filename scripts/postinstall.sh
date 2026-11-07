@@ -45,7 +45,7 @@ if ! ssh -o ConnectTimeout=5 "$target" true; then
 fi
 
 # Reviews and commits: secrets plus .sops.yaml (bootstrap stage 1 rewrites
-# the &nas age key there; without committing it, fresh clones cannot decrypt).
+# the &<host> age key there; without committing it, fresh clones cannot decrypt).
 changed_files=(secrets/secrets.yaml .sops.yaml)
 host_file="$(host_dir "$host")/default.nix"
 
