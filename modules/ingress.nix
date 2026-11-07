@@ -19,6 +19,12 @@ let
             username {env.INWX_USERNAME}
             password {env.INWX_PASSWORD}
           }
+          # The registrar publishes the challenge record with a delay; without
+          # a wait the CA looks too early and finds nothing, or a stale record
+          # from an earlier attempt.
+          propagation_delay 2m
+          propagation_timeout 10m
+          resolvers 1.1.1.1 9.9.9.9
         }
       ''
     else
