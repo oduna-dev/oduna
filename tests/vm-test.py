@@ -161,7 +161,7 @@ machine.succeed(
 # from converge; the stack restarts the container into a healthy state).
 machine.succeed(
     """for ctr in authentik_server authentik_worker authentik_postgres \\
-      immich_server immich_machine_learning immich_redis immich_postgres; do
+      immich_server immich_redis immich_postgres; do
       state="$(docker inspect -f '{{.State.Running}}' "$ctr")"
       [ "$state" = "true" ] || { echo "container $ctr not running (state=$state)"; exit 1; }
     done""",

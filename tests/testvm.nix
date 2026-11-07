@@ -76,6 +76,9 @@ let
     text = builtins.readFile ./load-images.sh;
   };
 
+  # The Immich machine-learning image (1.6 GB) is left out: the guest has no
+  # network for the model downloads, and nothing the test asserts uses it. The
+  # compose wrapper starts the stack without that service.
   imageTarballs = {
     authentik = [
       (pullImage {
@@ -103,12 +106,6 @@ let
         tag = "v3.3.3";
         imageDigest = "sha256:bae7664ff3aa4c2c1fcbdcdd86b40b105643c5f861f3e6a770fc760089f25862";
         sha256 = "sha256-tFFSRi5Z1lEtVBCJyd5zuRPLU4dFK2r7I0EpfD8aPgQ=";
-      })
-      (pullImage {
-        repository = "ghcr.io/immich-app/immich-machine-learning";
-        tag = "v3.3.3";
-        imageDigest = "sha256:73915f07e1f4289ba45b174c58443db74cef47ddf502613f475fc5e52458ea42";
-        sha256 = "sha256-oZnWGEZPVgDTeBIrKrdiBrYcW8jxbGyVjUKhL7LlLIc=";
       })
       (pullImage {
         repository = "docker.io/valkey/valkey";
