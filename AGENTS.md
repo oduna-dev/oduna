@@ -37,9 +37,10 @@ consume `nixosModules.default`; this repository never contains instance data.
   whose patch is already in `main`; `git rebase --onto main <parent-branch>`
   replays only the child's own commits, but only while the local parent branch
   still points at its pre-merge tip. After a rebase, push your own PR branch
-  with `--force-with-lease`; never force-push `main` or a branch someone else
-  works on. Rebase merging gives the commits new hashes, so instances pin the
-  commit on `main` after the merge, not the PR head.
+  with `--force-with-lease` (`.claude/settings.json` allows exactly that command
+  for agent sessions); never force-push `main` or a branch someone else works
+  on. Rebase merging gives the commits new hashes, so instances pin the commit
+  on `main` after the merge, not the PR head.
 - **Store paths in units.** A unit environment variable that names a file of
   this repository is interpolated (`"${./compose.yml}"`), never passed through
   `toString`: that drops the Nix dependency, the file is missing from the system
