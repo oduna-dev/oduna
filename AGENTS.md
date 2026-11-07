@@ -28,11 +28,13 @@ consume `nixosModules.default`; this repository never contains instance data.
   each one is a self-contained change that passes the lint with a message that
   says why; tidy a branch (amend, fixup, reorder) before it is merged. A stacked
   PR targets its parent's branch; after the parent has merged, rebase the child
-  onto `main` (`git rebase --onto main <parent-branch>`, Git drops the commits
-  that are already in `main`) and retarget the PR. After a rebase, push your own
-  PR branch with `--force-with-lease`; never force-push `main` or a branch
-  someone else works on. Rebase merging gives the commits new hashes, so
-  instances pin the commit on `main` after the merge, not the PR head.
+  onto `main` and retarget the PR. A plain `git rebase main` skips the commits
+  whose patch is already in `main`; `git rebase --onto main <parent-branch>`
+  replays only the child's own commits, but only while the local parent branch
+  still points at its pre-merge tip. After a rebase, push your own PR branch
+  with `--force-with-lease`; never force-push `main` or a branch someone else
+  works on. Rebase merging gives the commits new hashes, so instances pin the
+  commit on `main` after the merge, not the PR head.
 - **English only.** Code comments, docs, commit and PR messages.
 - **Comment and docs discipline.** State current facts, not history (no
   changelog in comments). Document the surprising, not the obvious. One
