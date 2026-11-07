@@ -15,7 +15,7 @@ services:
     env_file:
       - .env
     ports:
-      - "127.0.0.1:2283:2283"
+      - "127.0.0.1:${ODUNA_HTTP_PORT:?http port required}:2283"
     depends_on:
       - redis
       - database
