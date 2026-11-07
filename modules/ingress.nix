@@ -95,6 +95,12 @@ let
   '';
 in
 {
+  # The host reaches its own private vhosts directly, so converge, the checks
+  # and other host-side clients do not depend on mesh DNS being current.
+  networking.hosts."127.0.0.1" = lib.mapAttrsToList (
+    _: app: "${app.ingress.subdomain}.${cfg.internalDomain}"
+  ) apps;
+
   services.caddy = {
     enable = true;
     # The INWX plugin is only needed while the TLS mode issues public
