@@ -24,6 +24,23 @@ let
     };
     text = builtins.readFile ./forgejo/dump.sh;
   };
+  restore = pkgs.writeShellApplication {
+    name = "forgejo-restore";
+    runtimeInputs = [
+      config.services.forgejo.package
+      pkgs.coreutils
+      pkgs.findutils
+      pkgs.sqlite
+      pkgs.unzip
+    ];
+    runtimeEnv = {
+      FORGEJO_WORK_DIR = stateDir;
+      FORGEJO_CONFIG = "${stateDir}/custom/conf/app.ini";
+      FORGEJO_REPO_ROOT = config.services.forgejo.repositoryRoot;
+      FORGEJO_DB = config.services.forgejo.database.path;
+    };
+    text = builtins.readFile ./forgejo/restore.sh;
+  };
 in
 {
   config = lib.mkMerge [
@@ -42,6 +59,10 @@ in
             exec = lib.getExe dump;
             user = "forgejo";
             stopUnits = [ "forgejo.service" ];
+            restore = {
+              stopUnits = [ "forgejo.service" ];
+              exec = lib.getExe restore;
+            };
           }
         ];
       };

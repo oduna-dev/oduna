@@ -34,11 +34,42 @@ let
   manifest = pkgs.writeText "backup-manifest.json" (
     builtins.toJSON {
       retentionDays = 14;
+      inherit backupRoot;
+      appPaths = lib.mapAttrs (_: app: app.backup.paths) apps;
+      instancePaths = cfg.backup.paths;
+      # stackUnit: the compose stack unit of the app; the restore starts it to
+      # reach the database container.
       dumps = lib.concatLists (
-        lib.mapAttrsToList (app: entry: map (dump: { inherit app; } // dump) entry.backup.dumps) apps
+        lib.mapAttrsToList (
+          app: entry:
+          map (
+            dump:
+            {
+              inherit app;
+              stackUnit = "${app}-stack.service";
+            }
+            // dump
+          ) entry.backup.dumps
+        ) apps
       );
     }
   );
+
+  restoreScript = pkgs.writeShellApplication {
+    name = "homelab-restore";
+    runtimeInputs = with pkgs; [
+      coreutils
+      docker
+      findutils
+      gnugrep
+      gzip
+      jq
+      systemd
+      util-linux
+    ];
+    runtimeEnv.BACKUP_MANIFEST = "${manifest}";
+    text = builtins.readFile ./backups/restore.sh;
+  };
 
   backupScript = pkgs.writeShellApplication {
     name = "backup-databases";
@@ -58,6 +89,8 @@ let
   };
 in
 {
+  environment.systemPackages = [ restoreScript ];
+
   services.borgbackup.jobs.storagebox = lib.mkIf (cfg.backup.storageBoxRepo != "") {
     paths = [
       backupRoot

@@ -46,6 +46,10 @@ in
             container = "authentik_postgres";
             user = "authentik";
             database = "authentik";
+            restore.stopContainers = [
+              "authentik_server"
+              "authentik_worker"
+            ];
           }
         ];
       };

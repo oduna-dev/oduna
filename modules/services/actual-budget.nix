@@ -23,6 +23,7 @@ in
               type = "sqlite";
               dataDir = "${cfg.storage.appdataPath}/actual-budget";
               db = "server-files/account.sqlite";
+              restore.stopUnits = [ "actual.service" ];
             }
           ];
           # The budget files themselves; the dump only lists them.
