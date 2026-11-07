@@ -5,7 +5,9 @@ name: opencode-review
 # pull requests get no secrets and are only reviewed on a maintainer's
 # comment. Without the OPENCODE_API_KEY secret the jobs skip their steps, and
 # a failing review (quota exhausted, service outage) becomes a warning
-# annotation instead of a red check.
+# annotation instead of a red check. The prompt asks for findings only; the
+# action's GitHub app token can write to the branch, so a review that ignores
+# this still pushes commits and must be checked like any other change.
 
 on:
   pull_request:
@@ -61,6 +63,9 @@ jobs:
               through Nix interpolation into script text.
             - docs/vision.md is the plan: implemented items are replaced by
               pointers to the code, and implementation files never cite the plan.
+
+            This is a review only: do not change files, commit or push. Report
+            your findings as a comment.
 
             Check for correctness issues, bugs, and credential or
             instance-identifier leaks in the changed files. Report findings
@@ -125,6 +130,9 @@ jobs:
               through Nix interpolation into script text.
             - docs/vision.md is the plan: implemented items are replaced by
               pointers to the code, and implementation files never cite the plan.
+
+            This is a review only: do not change files, commit or push. Report
+            your findings as a comment.
 
             Check for correctness issues, bugs, and credential or
             instance-identifier leaks in the changed files. Report findings
