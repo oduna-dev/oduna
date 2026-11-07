@@ -69,13 +69,15 @@ read -r -p "Type 'WIPE' to continue: " confirmation
 
 install -d -m 700 "$staging/etc/ssh"
 
-# Host SSH identity: kept identical across reinstalls; its public key derives
-# the age key that decrypts the sops secrets at boot.
+# Host SSH identity, generated on every run; its public key derives the age key
+# that decrypts the sops secrets at boot.
 ssh-keygen -t ed25519 -N "" -C "$host" -f "$staging/etc/ssh/ssh_host_ed25519_key"
 host_age_key="$(nix run nixpkgs#ssh-to-age -- < "$staging/etc/ssh/ssh_host_ed25519_key.pub")"
 
 # Dedicated key for the append-only Borg repository on the StorageBox; add its
 # public key as the StorageBox forced-command key (borg serve --append-only).
+# postinstall.sh installs it only while the host config has no repository URL;
+# a reinstall against an existing repository authorises it by hand.
 ssh-keygen -t ed25519 -N "" -C "$host-borg" -f "$staging/etc/ssh/borg_append_only_key"
 
 # ZFS encryption keys, one per pool.

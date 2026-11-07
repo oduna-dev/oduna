@@ -329,6 +329,12 @@ in
     script = zfsSetupScript;
   };
 
+  # Tools the test script uses to check that the dumps are restorable.
+  environment.systemPackages = [
+    pkgs.sqlite
+    pkgs.unzip
+  ];
+
   # Make Caddy's private CA visible to the converge runs (merged with the
   # system bundle; curl reads CURL_CA_BUNDLE from its environment).
   systemd.services.caddy-ca-trust = {

@@ -196,4 +196,15 @@ machine.succeed(
     "! zfs list -H -t snapshot -o name | grep -q '@backup-snap'",
 )
 
+# The dumps must be restorable material, not just non-empty files.
+machine.succeed(
+    """for f in /mnt/tank/backups/vaultwarden/vaultwarden_*.sqlite3 \
+      /mnt/tank/backups/actual-budget/actual_account_*.sqlite3; do
+      [ "$(sqlite3 "$f" 'PRAGMA integrity_check')" = ok ] || { echo "$f fails the integrity check"; exit 1; }
+    done""",
+    "gzip -t /mnt/tank/backups/immich/immich_db_*.sql.gz",
+    "docker exec -i authentik_postgres pg_restore --list < /mnt/tank/backups/authentik/authentik_db_*.dump > /dev/null",
+    "unzip -tq /mnt/tank/backups/forgejo/forgejo_dump_*.zip",
+)
+
 print("vm-test: OK")

@@ -86,7 +86,10 @@ The bootstrap generates the host identity, ZFS pool keys and the Borg key,
 pauses for you to store them in an offline recovery vault, materializes the sops
 secrets from the template plus the pre-seed, and installs via nixos-anywhere.
 Day-2 deploys are a regular
-`nixos-rebuild switch --flake .#myhost --target-host root@<host>`.
+`nixos-rebuild switch --flake .#myhost --target-host root@<host>`. Add
+`CHECK_BACKUPS=1` to the checks to include the backup checks. Rebuilding on new
+hardware and restoring the data is described in
+[docs/restore-drill.md](docs/restore-drill.md).
 
 ## Development
 
