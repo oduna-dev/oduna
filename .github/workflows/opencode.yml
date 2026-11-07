@@ -50,7 +50,7 @@ jobs:
       - name: Skip without the API key
         if: env.OPENCODE_API_KEY == ''
         run: echo "::notice::OPENCODE_API_KEY is not set; skipping the review"
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         if: env.OPENCODE_API_KEY != ''
         with:
           persist-credentials: false
@@ -101,7 +101,7 @@ jobs:
       - name: Skip without the API key
         if: env.OPENCODE_API_KEY == ''
         run: echo "::notice::OPENCODE_API_KEY is not set; skipping the review"
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         if: env.OPENCODE_API_KEY != ''
         with:
           persist-credentials: false
