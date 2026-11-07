@@ -65,6 +65,22 @@ let
     pkgs.util-linux
   ];
 
+  # Enabled apps in run order; each has a fragment in ./converge/apps.
+  convergeApps = lib.filter (app: cfg.apps.${app}.enable) [
+    "beszel"
+    "forgejo"
+    "vaultwarden"
+    "immich"
+    "actual-budget"
+    "navidrome"
+  ];
+  hasApp = app: lib.elem app convergeApps;
+  # Apps that keep converge-managed env files.
+  stubApps = lib.filter hasApp [
+    "beszel"
+    "vaultwarden"
+  ];
+
   script = pkgs.writeShellScript "homelab-converge" (builtins.readFile ./converge/converge.sh);
   files = pkgs.writeShellApplication {
     name = "homelab-converge-files";
@@ -83,11 +99,10 @@ in
         "local-fs.target"
         "appdata-dirs.service"
       ];
-      before = [
-        "beszel-agent.service"
-        "vaultwarden.service"
-        "authentik-stack.service"
-      ];
+      before =
+        lib.optional (hasApp "beszel") "beszel-agent.service"
+        ++ lib.optional (hasApp "vaultwarden") "vaultwarden.service"
+        ++ lib.optional cfg.identity.enable "authentik-stack.service";
       wantedBy = [ "multi-user.target" ];
       unitConfig.RequiresMountsFor = [ appdata ];
       environment = {
@@ -98,7 +113,7 @@ in
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
-        ExecStart = lib.getExe files;
+        ExecStart = "${lib.getExe files} ${lib.concatStringsSep " " stubApps}";
       };
     };
 
@@ -107,18 +122,18 @@ in
       after = [
         "network-online.target"
         "homelab-converge-files.service"
-        "beszel-hub.service"
-        "beszel-agent.service"
-        "forgejo.service"
-        "navidrome.service"
-        "actual.service"
-        "vaultwarden.service"
-        "immich-stack.service"
         "docker.service"
       ]
-      ++ lib.optionals cfg.identity.enable [
-        "authentik-stack.service"
-      ];
+      ++ lib.optionals (hasApp "beszel") [
+        "beszel-hub.service"
+        "beszel-agent.service"
+      ]
+      ++ lib.optional (hasApp "forgejo") "forgejo.service"
+      ++ lib.optional (hasApp "navidrome") "navidrome.service"
+      ++ lib.optional (hasApp "actual-budget") "actual.service"
+      ++ lib.optional (hasApp "vaultwarden") "vaultwarden.service"
+      ++ lib.optional (hasApp "immich") "immich-stack.service"
+      ++ lib.optional cfg.identity.enable "authentik-stack.service";
       requires = [ "homelab-converge-files.service" ];
       wantedBy = [ "multi-user.target" ];
       unitConfig.RequiresMountsFor = [ appdata ];
@@ -130,6 +145,8 @@ in
         TimeoutStartSec = "10min";
       };
       environment = {
+        CONVERGE_LIB_DIR = "${./converge}";
+        CONVERGE_APPS = lib.concatStringsSep " " convergeApps;
         # Shared break-glass identity and its file location.
         ADMIN_ENV_FILE = config.sops.secrets."admin.env".path;
         AUTHENTIK_ENV_FILE = config.sops.secrets."authentik.env".path;

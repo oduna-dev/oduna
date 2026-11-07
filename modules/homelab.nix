@@ -388,22 +388,6 @@ in
       assertion = !cfg.identity.enable || cfg.idp.issuer != "";
       message = "homelab.identity.enable requires homelab.idp.issuer.";
     }
-    {
-      assertion =
-        !cfg.converge.enable
-        || lib.all (app: cfg.apps.${app}.enable) [
-          "vaultwarden"
-          "forgejo"
-          "navidrome"
-          "actual-budget"
-          "beszel"
-          "immich"
-        ];
-      message = ''
-        homelab.converge provisions every shipped app: disable it, or keep
-        all of them enabled.
-      '';
-    }
   ]
   ++ lib.concatLists (
     lib.mapAttrsToList (
