@@ -24,7 +24,7 @@ in
         port = app.ingress.port;
       }
       // lib.optionalAttrs config.homelab.identity.enable {
-        # Family members sign in through the IdP; the pre-seeded break-glass
+        # Members of the instance sign in through the IdP; the pre-seeded break-glass
         # admin keeps its local login.
         environment = {
           USER_CREATION = "true";

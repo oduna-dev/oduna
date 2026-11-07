@@ -54,7 +54,7 @@ machine.succeed(
 machine.succeed("systemctl restart homelab-converge.service")
 machine.succeed("systemctl is-active --quiet homelab-converge.service")
 machine.succeed(
-    """journalctl -u homelab-converge.service --no-pager | grep -qF 'group:family: present'""",
+    """journalctl -u homelab-converge.service --no-pager | grep -qF 'group:users: present'""",
     """journalctl -u homelab-converge.service --no-pager | grep -qE 'mapping:oauth2-email-verified: (created|present)'""",
     """journalctl -u homelab-converge.service --no-pager | grep -qF 'proxy provider:navidrome-homelab: present'""",
     """journalctl -u homelab-converge.service --no-pager | grep -qF 'outpost:@outpostName@: present'""",

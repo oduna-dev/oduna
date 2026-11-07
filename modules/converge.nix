@@ -152,6 +152,7 @@ in
         AUTHENTIK_ENV_FILE = config.sops.secrets."authentik.env".path;
         IDP_ISSUER = lib.optionalString cfg.identity.enable cfg.idp.issuer;
         INTERNAL_DOMAIN = cfg.internalDomain;
+        IDP_USER_GROUP = cfg.identity.userGroup;
 
         VAULTWARDEN_DATA_DIR = vaultwardenData;
         VAULTWARDEN_CONVERGE_ENV = vaultwardenConvergeEnv;

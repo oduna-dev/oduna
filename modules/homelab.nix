@@ -1,5 +1,5 @@
 # Typed schema for global parameters. This file defines the *shape* only.
-# Family environment values live in `envs/<env>/default.nix`; host configs
+# Instance environment values live in `envs/<env>/default.nix`; host configs
 # (`envs/<env>/<host>/default.nix`) set host-specific values and override
 # anything env-level through the same option paths. Services consume the
 # values via `config.homelab`; nothing hardcodes domains, SMTP relay
@@ -64,6 +64,14 @@ in
         Caddy vhost and forward-auth gate, and the SSO wiring of the consuming
         services. Requires `idp.issuer`
       '';
+      userGroup = lib.mkOption {
+        type = lib.types.str;
+        default = "users";
+        description = ''
+          Name of the IdP group the members of the instance belong to; converge
+          creates it next to the `admins` group.
+        '';
+      };
     };
     apps = lib.mkOption {
       type = lib.types.attrsOf (
