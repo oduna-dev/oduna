@@ -122,7 +122,6 @@ machine.succeed(
 )
 
 # The physical host's externals stay neutralized in the guest.
-machine.fail("systemctl is-enabled borgbackup-job-storagebox.service")
 machine.fail("systemctl is-active netbird.service")
 machine.fail("systemctl is-active healthchecks-heartbeat.service")
 
@@ -219,22 +218,44 @@ machine.succeed(
     "unzip -tq /mnt/tank/backups/forgejo/forgejo_dump_*.zip",
 )
 
-# Immich round trip (the restore drill's runbook, section 3): lose the whole
-# database, restore the dump into the empty cluster state and find the seeded
-# photo again. The original file stays on disk; restoring the library files
-# is the Borg step and not part of this test.
+# Offsite backup and restore, end to end against a local Borg repository (the
+# test profile points the production job at it). The job must succeed and
+# produce an archive; then everything the Immich restore needs is deleted from
+# the host, so it can only come back through `borg extract`.
+BORG = (
+    "BORG_REPO=/var/lib/borg-test-repo "
+    "BORG_PASSCOMMAND='cat /run/secrets/borg_passphrase' "
+)
+# --wait: the job is still initialising the repository when plain `start` returns.
+machine.succeed("systemctl start --wait borgbackup-job-storagebox.service")
+archive = machine.succeed(BORG + "borg list --short --last 1").strip()
+assert archive, "the Borg job produced no archive"
+machine.succeed(
+    BORG + f"borg list --short '::{archive}' | grep -q '^mnt/tank/backups/immich/immich_db_'",
+)
+
+# Immich round trip (the restore drill's runbook, sections 2 and 3): lose the
+# server, the library file, the local dumps and the whole database; fetch files
+# and dumps from Borg, restore the dump and find the seeded photo byte-identical.
 machine.succeed(
     """db="$(docker exec immich_postgres printenv POSTGRES_DB)" && \
       docker stop immich_server && \
       docker exec immich_postgres psql -U postgres -d postgres \
-        -c "DROP DATABASE \"$db\" WITH (FORCE)" """,
+        -c "DROP DATABASE \"$db\" WITH (FORCE)" && \
+      find /mnt/tank/immich -type f -name '*.jpg' \
+        ! -path '*/thumbs/*' ! -path '*/encoded-video/*' ! -path '*/backups/*' -delete && \
+      rm -rf /mnt/tank/backups/*""",
 )
 machine.fail(
     "docker exec immich_postgres psql -U postgres -lqt | grep -qw \"$(docker exec immich_postgres printenv POSTGRES_DB)\""
 )
+machine.fail("ls /mnt/tank/backups/immich/immich_db_*.sql.gz")
 machine.succeed(
+    # Archive paths are absolute without the leading slash: extracting from /
+    # puts files back where they were.
+    "cd / && " + BORG + f"borg extract '::{archive}' mnt/tank/immich mnt/tank/backups",
     "gunzip -c /mnt/tank/backups/immich/immich_db_*.sql.gz "
-    "| docker exec -i immich_postgres psql -U postgres -v ON_ERROR_STOP=0 > /dev/null",
+    "| docker exec -i immich_postgres psql -U postgres > /dev/null",
     "docker start immich_server",
 )
 machine.wait_until_succeeds(

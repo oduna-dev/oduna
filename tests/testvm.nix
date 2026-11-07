@@ -259,7 +259,9 @@ in
     idp.insecureTls = true;
     idp.caBundle = caddyCaBundle;
     # Externals the guest must not reach.
-    backup.storageBoxRepo = lib.mkOverride 90 "";
+    # The production Borg job runs against a local repository instead of the
+    # StorageBox; the job initialises it on first use.
+    backup.storageBoxRepo = lib.mkOverride 90 "/var/lib/borg-test-repo";
     monitoring.healthchecks.enable = lib.mkOverride 90 false;
     # The Actions runner is not part of the asserted surface, and the fixture
     # runner token does not satisfy the runner's connection validation.
@@ -336,6 +338,7 @@ in
     pkgs.unzip
     pkgs.jq
     pkgs.curl
+    pkgs.borgbackup
   ];
   environment.etc."drill-data-remote.sh".source = ../scripts/lib/drill-data-remote.sh;
 
