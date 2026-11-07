@@ -4,11 +4,10 @@ Oduna is a NixOS flake: modules, provisioning scripts and tests for a
 Git-declared home and dev server. Instances live in their own repositories and
 consume `nixosModules.default`; this repository never contains instance data.
 
-- **Nix in non-interactive shells.** A local agent shell may not source the
-  user's profile; there, add `/nix/var/nix/profiles/default/bin` to `PATH`
-  before invoking `nix`. Cloud sessions on the "Oduna and homelab" environment
-  already have `nix` on the `PATH`: `tools/cloud-setup.sh`, the setup script of
-  that environment, links it into `/usr/local/bin`.
+- **Nix in non-interactive shells.** The agent shell may not source the user's
+  profile; add `/nix/var/nix/profiles/default/bin` to `PATH` before invoking
+  `nix`, unless `command -v nix` already finds it. Cloud sessions normally have
+  it from `tools/cloud-setup.sh`, the setup script of the cloud environment.
 - **Lint after every change.** Run `nix run .#lint` (gitleaks, nixfmt check,
   deadnix, Prettier, markdownlint, shellcheck on every shell shebang file, and a
   check that fails on multi-line shell in Nix strings) and fix every finding;
