@@ -9,6 +9,12 @@ let
   appdata = cfg.storage.appdataPath;
   vaultwarden = cfg.apps.vaultwarden.enable;
   actual = cfg.apps.actual-budget.enable;
+  enabledApps = lib.optional vaultwarden "vaultwarden" ++ lib.optional actual "actual-budget";
+  script = pkgs.writeShellApplication {
+    name = "appdata-dirs";
+    runtimeInputs = [ pkgs.coreutils ];
+    text = builtins.readFile ./appdata-dirs/appdata-dirs.sh;
+  };
 in
 {
   config = lib.mkIf (vaultwarden || actual) {
@@ -23,23 +29,12 @@ in
       description = "Create per-service data directories on the app datasets";
       after = [ "zfs-mount.service" ];
       before = lib.optional vaultwarden "vaultwarden.service" ++ lib.optional actual "actual.service";
+      environment.APPDATA = appdata;
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
+        ExecStart = "${lib.getExe script} ${lib.concatStringsSep " " enabledApps}";
       };
-      script = with pkgs; ''
-        ${lib.optionalString vaultwarden ''
-          # Vaultwarden keeps its database and keys directly in the dataset root.
-          ${coreutils}/bin/install -d -o vaultwarden -g vaultwarden -m 700 ${appdata}/vaultwarden
-        ''}
-        ${lib.optionalString actual ''
-          # Actual Budget runs as the static system user "actual".
-          ${coreutils}/bin/install -d -o actual -g actual -m 750 \
-            ${appdata}/actual-budget/server-files
-          ${coreutils}/bin/install -d -o actual -g actual -m 750 \
-            ${appdata}/actual-budget/user-files
-        ''}
-      '';
     };
 
     systemd.services.vaultwarden = lib.mkIf vaultwarden {

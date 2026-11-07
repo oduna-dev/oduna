@@ -8,10 +8,11 @@
 }:
 let
   cfg = config.homelab;
-  heartbeatUrl = "${pkgs.writeShellScript "healthchecks-heartbeat" ''
-    url="$(cat ${config.sops.secrets."healthchecks_heartbeat_uuid".path})"
-    exec "${pkgs.curl}/bin/curl" -fsS -m 10 --retry 3 "$url"
-  ''}";
+  heartbeat = pkgs.writeShellApplication {
+    name = "healthchecks-heartbeat";
+    runtimeInputs = [ pkgs.curl ];
+    text = builtins.readFile ./monitoring/heartbeat.sh;
+  };
 in
 {
   # Host-wide sendmail interface used by smartd and ZED. Credentials come from
@@ -47,9 +48,10 @@ in
   # ISP failure), Healthchecks.io alerts the family mailbox.
   systemd.services.healthchecks-heartbeat = lib.mkIf cfg.monitoring.healthchecks.enable {
     description = "Healthchecks.io host liveness heartbeat ping";
+    environment.HC_URL_FILE = config.sops.secrets."healthchecks_heartbeat_uuid".path;
     serviceConfig = {
       Type = "oneshot";
-      ExecStart = heartbeatUrl;
+      ExecStart = lib.getExe heartbeat;
     };
   };
 

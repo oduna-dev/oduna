@@ -58,10 +58,23 @@ let
       finalImageTag = tag;
     };
 
-  composeNoDigest = pkgs.writeShellScriptBin "docker-compose" ''
-    sed -i -E 's/@sha256:[0-9a-f]{64}//' docker-compose.yml
-    exec ${pkgs.docker-compose}/bin/docker-compose "$@"
-  '';
+  composeNoDigest = pkgs.writeShellApplication {
+    name = "docker-compose";
+    runtimeInputs = [ pkgs.gnused ];
+    runtimeEnv.REAL_DOCKER_COMPOSE = lib.getExe pkgs.docker-compose;
+    text = builtins.readFile ./compose-no-digest.sh;
+  };
+
+  caddyCaTrust = pkgs.writeShellApplication {
+    name = "caddy-ca-trust";
+    runtimeInputs = [ pkgs.coreutils ];
+    text = builtins.readFile ./caddy-ca-trust.sh;
+  };
+
+  loadImages = pkgs.writeShellApplication {
+    name = "load-images";
+    text = builtins.readFile ./load-images.sh;
+  };
 
   imageTarballs = {
     authentik = [
@@ -323,20 +336,15 @@ in
     after = [ "caddy.service" ];
     requires = [ "caddy.service" ];
     wantedBy = [ "multi-user.target" ];
+    environment = {
+      CADDY_PKI_ROOT = caddyPkiRoot;
+      CADDY_CA_BUNDLE = caddyCaBundle;
+    };
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;
+      ExecStart = lib.getExe caddyCaTrust;
     };
-    script = ''
-      for try in $(seq 1 60); do
-        [ -f ${caddyPkiRoot} ] && break
-        sleep 1
-      done
-      [ -f ${caddyPkiRoot} ] || { echo "homelab-vm-test: Caddy CA root never appeared"; exit 1; }
-      install -d -m 755 "$(dirname ${caddyCaBundle})"
-      cat /etc/ssl/certs/ca-bundle.crt ${caddyPkiRoot} > ${caddyCaBundle}
-      chmod 644 ${caddyCaBundle}
-    '';
   };
 
   systemd.services.homelab-converge = {
@@ -357,15 +365,11 @@ in
   # then match.
   systemd.services.immich-stack = {
     path = lib.mkBefore [ composeNoDigest ];
-    preStart = lib.concatStringsSep "\n" (
-      map (image: ''docker load < "${image}"'') imageTarballs.immich
-    );
+    preStart = "${lib.getExe loadImages} ${lib.concatStringsSep " " (map toString imageTarballs.immich)}";
   };
   systemd.services.authentik-stack = {
     path = lib.mkBefore [ composeNoDigest ];
-    preStart = lib.concatStringsSep "\n" (
-      map (image: ''docker load < "${image}"'') imageTarballs.authentik
-    );
+    preStart = "${lib.getExe loadImages} ${lib.concatStringsSep " " (map toString imageTarballs.authentik)}";
     after = [ "caddy-ca-trust.service" ];
     requires = [ "caddy-ca-trust.service" ];
   };

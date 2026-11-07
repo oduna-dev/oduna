@@ -66,6 +66,11 @@ let
   ];
 
   script = pkgs.writeShellScript "homelab-converge" (builtins.readFile ./converge/converge.sh);
+  files = pkgs.writeShellApplication {
+    name = "homelab-converge-files";
+    runtimeInputs = [ pkgs.coreutils ];
+    text = builtins.readFile ./converge/files.sh;
+  };
 in
 {
   config = lib.mkIf cfg.converge.enable {
@@ -85,20 +90,16 @@ in
       ];
       wantedBy = [ "multi-user.target" ];
       unitConfig.RequiresMountsFor = [ appdata ];
+      environment = {
+        BESZEL_AGENT_ENV_FILE = "${appdata}/beszel-agent/agent.env";
+        VAULTWARDEN_DATA_DIR = vaultwardenData;
+        VAULTWARDEN_CONVERGE_ENV = vaultwardenConvergeEnv;
+      };
       serviceConfig = {
         Type = "oneshot";
         RemainAfterExit = true;
+        ExecStart = lib.getExe files;
       };
-      script = ''
-        # Beszel agent env: root-owned stub (DynamicUser parses via pid1);
-        # homelab-converge supplies KEY here.
-        install -d -m 700 ${appdata}/beszel-agent
-        [ -f ${appdata}/beszel-agent/agent.env ] || \
-          : > ${appdata}/beszel-agent/agent.env
-        # Vaultwarden converge env: staged admin hash + SSO_* entries.
-        install -d -o vaultwarden -g vaultwarden -m 700 ${vaultwardenData}
-        [ -f ${vaultwardenConvergeEnv} ] || : > ${vaultwardenConvergeEnv}
-      '';
     };
 
     systemd.services.homelab-converge = {
