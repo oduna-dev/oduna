@@ -65,7 +65,7 @@ beszel_hub_step() {
     hub_admin_id="$(curl -fsS -X POST http://127.0.0.1:8090/api/collections/users/records \
       -H 'Content-Type: application/json' -H "Authorization: $beszel_hub_token" \
       -d "$(jq -cn --arg email "$admin_email" --arg pw "$admin_password" \
-        '{email: $email, password: $pw, verified: true, role: "admin"}')" \
+        '{email: $email, password: $pw, passwordConfirm: $pw, verified: true, role: "admin"}')" \
       | jq -r '.id // empty' 2>/dev/null)" || hub_admin_id=""
     [ -z "$hub_admin_id" ] || echo "beszel: hub admin user created"
   else
