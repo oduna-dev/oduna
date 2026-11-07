@@ -8,6 +8,8 @@ name: opencode-review
 # annotation instead of a red check. The prompt asks for findings only; the
 # action's GitHub app token can write to the branch, so a review that ignores
 # this still pushes commits and must be checked like any other change.
+# Free models only work once the OpenCode workspace allows free endpoints that
+# train on request data; without it the review ends with that error.
 
 on:
   pull_request:
@@ -62,22 +64,7 @@ jobs:
           prompt: |
             Review this pull request.
 
-            Apply the conventions in AGENTS.md:
-            - English only: code comments, docs, commit and PR messages.
-            - No changelog-style comments or documentation (state current facts only).
-            - One canonical place per fact: code comments hold implementation
-              details, the README holds the overview and manual steps.
-            - No instance data in this repository: domains, host names, accounts,
-              disk IDs, keys and e-mail addresses belong to instances; examples
-              use example.org and the demo instance.
-            - Nix code: global parameters go through the typed options.homelab
-              schema, never hardcoded in service modules; only the plaintext
-              secrets template lives here; nixfmt RFC style.
-            - No logic in Nix strings: host-side scripts are files with a shebang;
-              parameters reach them through the environment or arguments, never
-              through Nix interpolation into script text.
-            - docs/vision.md is the plan: implemented items are replaced by
-              pointers to the code, and implementation files never cite the plan.
+            Apply the conventions in AGENTS.md.
 
             This is a review only: do not change files, commit or push. Report
             your findings as a comment.
@@ -85,7 +72,7 @@ jobs:
             Check for correctness issues, bugs, and credential or
             instance-identifier leaks in the changed files. Report findings
             concisely; do not suggest stylistic rewrites that violate the
-            conventions above.
+            conventions.
       - name: Report a failed review without failing the check
         if: steps.review.outcome == 'failure'
         run:
@@ -129,22 +116,7 @@ jobs:
           prompt: |
             Review this pull request.
 
-            Apply the conventions in AGENTS.md:
-            - English only: code comments, docs, commit and PR messages.
-            - No changelog-style comments or documentation (state current facts only).
-            - One canonical place per fact: code comments hold implementation
-              details, the README holds the overview and manual steps.
-            - No instance data in this repository: domains, host names, accounts,
-              disk IDs, keys and e-mail addresses belong to instances; examples
-              use example.org and the demo instance.
-            - Nix code: global parameters go through the typed options.homelab
-              schema, never hardcoded in service modules; only the plaintext
-              secrets template lives here; nixfmt RFC style.
-            - No logic in Nix strings: host-side scripts are files with a shebang;
-              parameters reach them through the environment or arguments, never
-              through Nix interpolation into script text.
-            - docs/vision.md is the plan: implemented items are replaced by
-              pointers to the code, and implementation files never cite the plan.
+            Apply the conventions in AGENTS.md.
 
             This is a review only: do not change files, commit or push. Report
             your findings as a comment.
@@ -152,7 +124,7 @@ jobs:
             Check for correctness issues, bugs, and credential or
             instance-identifier leaks in the changed files. Report findings
             concisely; do not suggest stylistic rewrites that violate the
-            conventions above.
+            conventions.
       - name: Report a failed review without failing the check
         if: steps.review.outcome == 'failure'
         run:
