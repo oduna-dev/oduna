@@ -5,56 +5,70 @@
 }:
 let
   cfg = config.homelab;
+  app = cfg.apps.vaultwarden;
   dataDir = "${cfg.storage.appdataPath}/vaultwarden";
 in
 {
-  services.vaultwarden = {
-    enable = true;
-    dbBackend = "sqlite";
-    config = {
-      DOMAIN = "https://vault.${cfg.internalDomain}";
-      SIGNUPS_ALLOWED = false;
-      INVITATIONS_ALLOWED = true;
-      ROCKET_ADDRESS = "127.0.0.1";
-      ROCKET_PORT = 8080;
-      SMTP_HOST = cfg.smtp.host;
-      SMTP_PORT = cfg.smtp.port;
-      SMTP_SECURITY = "starttls";
-      SMTP_FROM = cfg.smtp.alertSender;
-      SMTP_FROM_NAME = "${cfg.instance.name} Vault";
-      SMTP_USERNAME = cfg.smtp.user;
-      DATA_FOLDER = dataDir;
+  config = lib.mkMerge [
+    {
+      homelab.apps.vaultwarden = {
+        enable = lib.mkDefault true;
+        ingress = {
+          subdomain = "vault";
+          port = 8080;
+        };
+      };
     }
-    // lib.optionalAttrs (cfg.idp.issuer != "") {
-      # SSO login keys: the static config pins the SSO mode; the enablement
-      # switch and credentials come from converge.env (homelab-converge
-      # provisions them via the IdP API), so password login keeps working on
-      # an instance without SSO credentials. The master password stays what
-      # decrypts the vault — password login is kept permanently as the
-      # break-glass path.
-      SSO_ONLY = false;
-      SSO_PKCE = true;
-    };
-    # Two files, in order: sops carries the static secrets (relay password),
-    # converge.env the runtime entries (re-hashed ADMIN_TOKEN, SSO_*); later
-    # files win, so converge converges over whatever sops contains.
-    environmentFile = [
-      config.sops.secrets."vaultwarden.env".path
-    ]
-    ++ lib.optionals cfg.converge.enable [
-      (lib.concatStringsSep "" [
-        dataDir
-        "/converge.env"
-      ])
-    ];
-  };
+    (lib.mkIf app.enable {
+      services.vaultwarden = {
+        enable = true;
+        dbBackend = "sqlite";
+        config = {
+          DOMAIN = "https://${app.ingress.subdomain}.${cfg.internalDomain}";
+          SIGNUPS_ALLOWED = false;
+          INVITATIONS_ALLOWED = true;
+          ROCKET_ADDRESS = "127.0.0.1";
+          ROCKET_PORT = app.ingress.port;
+          SMTP_HOST = cfg.smtp.host;
+          SMTP_PORT = cfg.smtp.port;
+          SMTP_SECURITY = "starttls";
+          SMTP_FROM = cfg.smtp.alertSender;
+          SMTP_FROM_NAME = "${cfg.instance.name} Vault";
+          SMTP_USERNAME = cfg.smtp.user;
+          DATA_FOLDER = dataDir;
+        }
+        // lib.optionalAttrs cfg.identity.enable {
+          # SSO login keys: the static config pins the SSO mode; the enablement
+          # switch and credentials come from converge.env (homelab-converge
+          # provisions them via the IdP API), so password login keeps working on
+          # an instance without SSO credentials. The master password stays what
+          # decrypts the vault — password login is kept permanently as the
+          # break-glass path.
+          SSO_ONLY = false;
+          SSO_PKCE = true;
+        };
+        # Two files, in order: sops carries the static secrets (relay password),
+        # converge.env the runtime entries (re-hashed ADMIN_TOKEN, SSO_*); later
+        # files win, so converge converges over whatever sops contains.
+        environmentFile = [
+          config.sops.secrets."vaultwarden.env".path
+        ]
+        ++ lib.optionals cfg.converge.enable [
+          (lib.concatStringsSep "" [
+            dataDir
+            "/converge.env"
+          ])
+        ];
+      };
 
-  # The upstream sandbox mounts the filesystem readonly outside the
-  # StateDirectory; the dataset-backed DATA_FOLDER must be an explicit
-  # read-write exception. converge.env is a plain EnvironmentFile created
-  # first by homelab-converge-files, so the start order stays intact.
-  systemd.services.vaultwarden = {
-    serviceConfig.ReadWritePaths = [ dataDir ];
-    after = lib.optionals cfg.converge.enable [ "homelab-converge-files.service" ];
-  };
+      # The upstream sandbox mounts the filesystem readonly outside the
+      # StateDirectory; the dataset-backed DATA_FOLDER must be an explicit
+      # read-write exception. converge.env is a plain EnvironmentFile created
+      # first by homelab-converge-files, so the start order stays intact.
+      systemd.services.vaultwarden = {
+        serviceConfig.ReadWritePaths = [ dataDir ];
+        after = lib.optionals cfg.converge.enable [ "homelab-converge-files.service" ];
+      };
+    })
+  ];
 }

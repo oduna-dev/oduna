@@ -115,7 +115,7 @@ in
         "immich-stack.service"
         "docker.service"
       ]
-      ++ lib.optionals (cfg.idp.issuer != "") [
+      ++ lib.optionals cfg.identity.enable [
         "authentik-stack.service"
       ];
       requires = [ "homelab-converge-files.service" ];
@@ -132,7 +132,7 @@ in
         # Shared break-glass identity and its file location.
         ADMIN_ENV_FILE = config.sops.secrets."admin.env".path;
         AUTHENTIK_ENV_FILE = config.sops.secrets."authentik.env".path;
-        IDP_ISSUER = cfg.idp.issuer;
+        IDP_ISSUER = lib.optionalString cfg.identity.enable cfg.idp.issuer;
         INTERNAL_DOMAIN = cfg.internalDomain;
 
         VAULTWARDEN_DATA_DIR = vaultwardenData;

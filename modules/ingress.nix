@@ -25,6 +25,74 @@ let
       ''
         tls internal
       '';
+
+  apps = lib.filterAttrs (_: app: app.enable) cfg.apps;
+  upstream = app: "127.0.0.1:${toString app.ingress.port}";
+
+  matcher = name: app: "@${name} host ${app.ingress.subdomain}.${cfg.internalDomain}";
+
+  # Forward-auth gate for apps without OIDC support: the authentik proxy
+  # outpost authenticates the request and the identity headers pass through
+  # unchanged. The outpost-side flow paths (start/callback/ping) must reach
+  # the outpost itself, hence the dedicated reverse_proxy inside the ordered
+  # route (official authentik Caddy snippet).
+  gatedHandler = name: app: ''
+    handle @${name} {
+      route {
+        reverse_proxy /outpost.goauthentik.io/* 127.0.0.1:9001
+
+        forward_auth 127.0.0.1:9001 {
+          uri /outpost.goauthentik.io/auth/caddy
+          copy_headers {
+            X-Authentik-Username
+            X-Authentik-Groups
+            X-Authentik-Email
+            X-Authentik-Name
+            X-Authentik-Uid
+          }
+        }
+
+        reverse_proxy ${upstream app}
+      }
+    }
+  '';
+
+  handler =
+    name: app:
+    if app.ingress.forwardAuth && cfg.identity.enable then
+      gatedHandler name app
+    else
+      "handle @${name} { reverse_proxy ${upstream app} }";
+
+  # Hardened public sharing: only the paths required for shared links are
+  # reachable, everything else is denied before it touches Immich.
+  sharingVhost = ''
+    ${cfg.sharingDomain}:2284 {
+      ${tlsBlock}
+
+      @allowed {
+        path /_app/*
+        path /api/server/version
+        path /api/server/features
+        path /api/server/config
+        path /api/server/about
+        path /api/shared-links/*
+        path /api/assets/*
+        path /api/download/*
+        path /share/*
+        path /favicon*
+        path /manifest.json
+      }
+
+      handle @allowed {
+        reverse_proxy ${upstream cfg.apps.immich}
+      }
+
+      handle {
+        respond "Access Denied" 403
+      }
+    }
+  '';
 in
 {
   services.caddy = {
@@ -49,80 +117,14 @@ in
       *.${cfg.internalDomain} {
         ${tlsBlock}
 
-        @vault  host vault.${cfg.internalDomain}
-        @immich host immich.${cfg.internalDomain}
-        @budget host budget.${cfg.internalDomain}
-        @git    host git.${cfg.internalDomain}
-        @music  host music.${cfg.internalDomain}
-        @beszel host beszel.${cfg.internalDomain}
-        @auth   host auth.${cfg.internalDomain}
+        ${lib.concatStringsSep "\n" (lib.mapAttrsToList matcher apps)}
 
-        handle @vault  { reverse_proxy 127.0.0.1:8080 }
-        handle @immich { reverse_proxy 127.0.0.1:2283 }
-        handle @budget { reverse_proxy 127.0.0.1:5006 }
-        handle @git    { reverse_proxy 127.0.0.1:3000 }
-        ${lib.optionalString (cfg.idp.issuer != "") ''
-          handle @music {
-            # Navidrome has no OIDC support: gate it behind the authentik
-            # proxy outpost; the identity headers pass through unchanged and
-            # Navidrome is configured to read the authentik header names.
-            # The outpost-side flow paths (start/callback/ping) must reach the
-            # outpost itself, hence the dedicated reverse_proxy inside the
-            # ordered route (official authentik Caddy snippet).
-            route {
-              reverse_proxy /outpost.goauthentik.io/* 127.0.0.1:9001
-
-              forward_auth 127.0.0.1:9001 {
-                uri /outpost.goauthentik.io/auth/caddy
-                copy_headers {
-                  X-Authentik-Username
-                  X-Authentik-Groups
-                  X-Authentik-Email
-                  X-Authentik-Name
-                  X-Authentik-Uid
-                }
-              }
-
-              reverse_proxy 127.0.0.1:4533
-            }
-          }
-          handle @auth { reverse_proxy 127.0.0.1:9000 }
-        ''}
-        ${lib.optionalString (cfg.idp.issuer == "") ''
-          handle @music { reverse_proxy 127.0.0.1:4533 }
-        ''}
-        handle @beszel { reverse_proxy 127.0.0.1:8090 }
+        ${lib.concatStringsSep "\n" (lib.mapAttrsToList handler apps)}
 
         handle { respond "Not Found" 404 }
       }
 
-      # Hardened public sharing: only the paths required for shared links are
-      # reachable, everything else is denied before it touches Immich.
-      ${cfg.sharingDomain}:2284 {
-        ${tlsBlock}
-
-        @allowed {
-          path /_app/*
-          path /api/server/version
-          path /api/server/features
-          path /api/server/config
-          path /api/server/about
-          path /api/shared-links/*
-          path /api/assets/*
-          path /api/download/*
-          path /share/*
-          path /favicon*
-          path /manifest.json
-        }
-
-        handle @allowed {
-          reverse_proxy 127.0.0.1:2283
-        }
-
-        handle {
-          respond "Access Denied" 403
-        }
-      }
+      ${lib.optionalString cfg.apps.immich.enable sharingVhost}
     '';
   };
 }

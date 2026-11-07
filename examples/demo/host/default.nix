@@ -20,6 +20,7 @@
         alertSender = "notifications@example.org";
         user = "relay@example.org";
       };
+      identity.enable = true;
       idp.issuer = "https://auth.hub.example.org";
 
       converge.enable = true;

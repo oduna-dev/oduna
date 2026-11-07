@@ -4,41 +4,57 @@
 # dataset on every activation.
 {
   config,
+  lib,
   pkgs,
   ...
 }:
 let
   cfg = config.homelab;
+  app = cfg.apps.immich;
   immichDir = "${cfg.storage.appdataPath}/immich";
 in
 {
-  virtualisation.docker.enable = true;
+  config = lib.mkMerge [
+    {
+      # The compose file publishes the port literally; keep both in sync.
+      homelab.apps.immich = {
+        enable = lib.mkDefault true;
+        ingress = {
+          subdomain = "immich";
+          port = 2283;
+        };
+      };
+    }
+    (lib.mkIf app.enable {
+      virtualisation.docker.enable = true;
 
-  systemd.services.immich-stack = {
-    description = "Immich docker compose stack";
-    after = [
-      "docker.service"
-    ];
-    requires = [
-      "docker.service"
-    ];
-    wantedBy = [ "multi-user.target" ];
-    unitConfig.RequiresMountsFor = immichDir;
-    path = with pkgs; [
-      docker
-      docker-compose
-    ];
-    serviceConfig = {
-      Type = "oneshot";
-      RemainAfterExit = true;
-      WorkingDirectory = immichDir;
-      TimeoutStartSec = "15min";
-    };
-    script = ''
-      install -d -m 755 ${immichDir}
-      install -m 644 ${./immich/compose.yml} ${immichDir}/docker-compose.yml
-      install -m 600 ${config.sops.secrets."immich.env".path} ${immichDir}/.env
-      docker-compose up -d
-    '';
-  };
+      systemd.services.immich-stack = {
+        description = "Immich docker compose stack";
+        after = [
+          "docker.service"
+        ];
+        requires = [
+          "docker.service"
+        ];
+        wantedBy = [ "multi-user.target" ];
+        unitConfig.RequiresMountsFor = immichDir;
+        path = with pkgs; [
+          docker
+          docker-compose
+        ];
+        serviceConfig = {
+          Type = "oneshot";
+          RemainAfterExit = true;
+          WorkingDirectory = immichDir;
+          TimeoutStartSec = "15min";
+        };
+        script = ''
+          install -d -m 755 ${immichDir}
+          install -m 644 ${./immich/compose.yml} ${immichDir}/docker-compose.yml
+          install -m 600 ${config.sops.secrets."immich.env".path} ${immichDir}/.env
+          docker-compose up -d
+        '';
+      };
+    })
+  ];
 }

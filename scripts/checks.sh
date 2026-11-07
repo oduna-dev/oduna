@@ -49,7 +49,8 @@ internal_domain="$(nix eval --raw "$homelab_dir#nixosConfigurations.${host}.conf
 # root cause. This check reports them as failures until then.
 
 auth_units=""
-if [ -n "$(nix eval "$homelab_dir#nixosConfigurations.${host}.config.homelab.idp.issuer" 2>/dev/null | sed 's/"//g')" ]; then
+identity_enabled="$(nix eval "$homelab_dir#nixosConfigurations.${host}.config.homelab.identity.enable" 2>/dev/null | sed 's/"//g')"
+if [ "$identity_enabled" = "true" ]; then
   auth_units="authentik-stack"
 fi
 
@@ -79,12 +80,11 @@ tls_ok() {
 
 check "tls for mesh vhost" tls_ok
 
-idp_issuer="$(nix eval --raw "$homelab_dir#nixosConfigurations.${host}.config.homelab.idp.issuer")"
 if [ "$(nix eval "$homelab_dir#nixosConfigurations.${host}.config.homelab.converge.enable" 2>/dev/null | sed 's/"//g')" = "true" ]; then
   check "homelab converged" remote \
     "systemctl is-active homelab-converge.service homelab-converge-files.service"
 fi
-if [ -n "$idp_issuer" ]; then
+if [ "$identity_enabled" = "true" ]; then
   sc=$(curl -fsS --max-time 10 -o /dev/null -w '%{http_code}' "https://auth.${internal_domain}/-/health/live/" || true)
   check "idp auth vhost healthy" test "$sc" = "200"
 
