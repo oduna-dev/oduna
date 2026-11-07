@@ -62,7 +62,7 @@ services:
     ports:
       # TLS terminates at the Caddy wildcard vhost, so only the HTTP listener
       # is published; the container's self-signed HTTPS listener stays unused.
-      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:${ODUNA_HTTP_PORT:?http port required}:9000"
     # Same shared-memory sizing as the upstream compose file.
     shm_size: 512mb
     volumes:

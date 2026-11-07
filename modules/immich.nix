@@ -1,7 +1,7 @@
 # Immich runs as a Docker Compose stack on the host Docker daemon: the coupled
 # ML runtimes and database extensions move too fast for native NixOS modules.
 # The compose file is owned by this repository and re-installed onto the app
-# dataset on every activation.
+# dataset on every activation (see modules/compose-stack).
 {
   config,
   lib,
@@ -11,12 +11,11 @@
 let
   cfg = config.homelab;
   app = cfg.apps.immich;
-  immichDir = "${cfg.storage.appdataPath}/immich";
+  mkComposeStack = import ./compose-stack { inherit lib pkgs; };
 in
 {
   config = lib.mkMerge [
     {
-      # The compose file publishes the port literally; keep both in sync.
       homelab.apps.immich = {
         enable = lib.mkDefault true;
         ingress = {
@@ -28,32 +27,13 @@ in
     (lib.mkIf app.enable {
       virtualisation.docker.enable = true;
 
-      systemd.services.immich-stack = {
+      systemd.services = mkComposeStack {
+        name = "immich";
         description = "Immich docker compose stack";
-        after = [
-          "docker.service"
-        ];
-        requires = [
-          "docker.service"
-        ];
-        wantedBy = [ "multi-user.target" ];
-        unitConfig.RequiresMountsFor = immichDir;
-        path = with pkgs; [
-          docker
-          docker-compose
-        ];
-        serviceConfig = {
-          Type = "oneshot";
-          RemainAfterExit = true;
-          WorkingDirectory = immichDir;
-          TimeoutStartSec = "15min";
-        };
-        script = ''
-          install -d -m 755 ${immichDir}
-          install -m 644 ${./immich/compose.yml} ${immichDir}/docker-compose.yml
-          install -m 600 ${config.sops.secrets."immich.env".path} ${immichDir}/.env
-          docker-compose up -d
-        '';
+        dir = "${cfg.storage.appdataPath}/immich";
+        composeFile = ./immich/compose.yml;
+        secretsEnv = config.sops.secrets."immich.env".path;
+        port = app.ingress.port;
       };
     })
   ];
