@@ -53,6 +53,15 @@ jobs:
               test -w /dev/kvm
               touch $out
             "'
+      - name: Build the test inputs
+        shell: bash
+        run: |
+          # Everything the test consumes (compose image tarballs, the system
+          # closure), built apart from the VM run so that the next step times
+          # the guest alone and this one times fetching and building.
+          drv="$(nix eval --raw .#checks.x86_64-linux.vm-test.drvPath)"
+          nix-store --query --references "$drv" | grep -F '.drv' \
+            | xargs -r nix-store --realise > /dev/null
       - name: Boot the demo instance and assert convergence
         shell: bash
         run: |
