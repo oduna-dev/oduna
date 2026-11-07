@@ -6,8 +6,6 @@ name: VM boot test
 
 on:
   workflow_dispatch:
-  push:
-    branches: [claude/initial-import]
 
 jobs:
   vm-test:
