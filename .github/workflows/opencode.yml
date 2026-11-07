@@ -3,7 +3,9 @@ name: opencode-review
 # Reviews pull requests from this repository when they are opened or marked
 # ready, and on demand when a maintainer comments "/opencode-review". Fork
 # pull requests get no secrets and are only reviewed on a maintainer's
-# comment. Without the OPENCODE_API_KEY secret the jobs skip their steps.
+# comment. Without the OPENCODE_API_KEY secret the jobs skip their steps, and
+# a failing review (quota exhausted, service outage) becomes a warning
+# annotation instead of a red check.
 
 on:
   pull_request:
@@ -34,8 +36,10 @@ jobs:
         if: env.OPENCODE_API_KEY != ''
         with:
           persist-credentials: false
-      - uses: anomalyco/opencode/github@latest
+      - id: review
+        uses: anomalyco/opencode/github@latest
         if: env.OPENCODE_API_KEY != ''
+        continue-on-error: true
         with:
           model: opencode-go/kimi-k2.7-code
           prompt: |
@@ -62,6 +66,11 @@ jobs:
             instance-identifier leaks in the changed files. Report findings
             concisely; do not suggest stylistic rewrites that violate the
             conventions above.
+      - name: Report a failed review without failing the check
+        if: steps.review.outcome == 'failure'
+        run:
+          echo "::warning::The OpenCode review failed (quota exhausted or a
+          service outage?); see the review step log"
 
   # Manual review on a command-style comment from a maintainer, e.g.
   # "/opencode-review".
@@ -90,8 +99,10 @@ jobs:
         if: env.OPENCODE_API_KEY != ''
         with:
           persist-credentials: false
-      - uses: anomalyco/opencode/github@latest
+      - id: review
+        uses: anomalyco/opencode/github@latest
         if: env.OPENCODE_API_KEY != ''
+        continue-on-error: true
         with:
           model: opencode-go/kimi-k2.7-code
           mentions: /opencode-review
@@ -119,3 +130,8 @@ jobs:
             instance-identifier leaks in the changed files. Report findings
             concisely; do not suggest stylistic rewrites that violate the
             conventions above.
+      - name: Report a failed review without failing the check
+        if: steps.review.outcome == 'failure'
+        run:
+          echo "::warning::The OpenCode review failed (quota exhausted or a
+          service outage?); see the review step log"
