@@ -57,7 +57,9 @@ installs the system. Store the escrow it prints.
 
 Postinstall installs the new Borg public key on the StorageBox only while the
 host config has no `storageBoxRepo`. On a rebuild the URL exists already, so
-authorise the key by hand (**unverified** on a real StorageBox):
+authorise the key by hand (**unverified** on a real StorageBox). The StorageBox
+only accepts this with its password, which ssh asks for on the terminal
+(postinstall passes it through `sshpass`):
 
 ```sh
 ssh root@<ip> cat /etc/ssh/borg_append_only_key.pub \

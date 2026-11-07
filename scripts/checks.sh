@@ -107,8 +107,10 @@ if [ "${CHECK_BACKUPS:-0}" = "1" ]; then
   bulk_path="$(nix eval --raw "$homelab_dir#nixosConfigurations.${host}.config.homelab.storage.bulkPath")"
   check "nightly dumps not failed" remote \
     "! systemctl is-failed --quiet backup-databases.service"
-  check "nightly dumps written within 36 hours" remote \
-    "test -n \"\$(find '$bulk_path/backups' -type f -mmin -2160 | head -n 1)\""
+  dump_count="$(nix eval "$homelab_dir#nixosConfigurations.${host}.config.homelab.apps" \
+    --apply 'apps: builtins.length (builtins.concatLists (map (app: app.backup.dumps) (builtins.filter (app: app.enable) (builtins.attrValues apps))))')"
+  check "every nightly dump written within 36 hours ($dump_count declared)" remote \
+    "test \"\$(find '$bulk_path/backups' -type f -mmin -2160 | wc -l)\" -ge $dump_count"
   borg_repo="$(nix eval --raw "$homelab_dir#nixosConfigurations.${host}.config.homelab.backup.storageBoxRepo")"
   if [ -n "$borg_repo" ]; then
     check "offsite backup not failed" remote \
