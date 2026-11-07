@@ -112,7 +112,9 @@ if ! grep -qF -- "- &$host " .sops.yaml; then
   echo ".sops.yaml is missing the '&$host' age key entry" >&2
   exit 1
 fi
-sed -i "s|\(- &$host \).*|\1$host_age_key|" .sops.yaml
+# The host name is a literal in the sed expression as well.
+host_re="$(printf '%s' "$host" | sed 's/[][\.*^$|/]/\\&/g')"
+sed -i "s|\(- &$host_re \).*|\1$host_age_key|" .sops.yaml
 
 if [ ! -s secrets/secrets.yaml ]; then
 
