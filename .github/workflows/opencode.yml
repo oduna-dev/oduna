@@ -55,7 +55,7 @@ jobs:
         with:
           persist-credentials: false
       - id: review
-        uses: anomalyco/opencode/github@dc2ffcf8bf26f9e669b6aa22b95f50e12be15e06 # v2.2.6
+        uses: anomalyco/opencode/github@17b79f4e0c16dcff200b0417567ed22aeb2d7166 # github-v1.2.28
         if: env.OPENCODE_API_KEY != ''
         continue-on-error: true
         timeout-minutes: 15
@@ -106,7 +106,7 @@ jobs:
         with:
           persist-credentials: false
       - id: review
-        uses: anomalyco/opencode/github@dc2ffcf8bf26f9e669b6aa22b95f50e12be15e06 # v2.2.6
+        uses: anomalyco/opencode/github@17b79f4e0c16dcff200b0417567ed22aeb2d7166 # github-v1.2.28
         if: env.OPENCODE_API_KEY != ''
         continue-on-error: true
         timeout-minutes: 15
