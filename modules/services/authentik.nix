@@ -47,13 +47,6 @@ in
       # Dataset directories are provisioned before the stack unit: systemd
       # evaluates a unit's namespace before any ExecStartPre runs and the
       # datasets mount later than activation scripts could chown (see
-      # modules/appdata-dirs.nix). UID 1000 is the authentik container user,
-      # 70 the alpine postgres one. The outpost env file is stubbed here too:
-      # compose refuses missing env_file paths, and homelab-converge supplies
-      # the token content thereafter.
-      # Dataset directories are provisioned before the stack unit: systemd
-      # evaluates a unit's namespace before any ExecStartPre runs and the
-      # datasets mount later than activation scripts could chown (see
       # modules/appdata-dirs.nix). The outpost env file is stubbed there too:
       # compose refuses missing env_file paths, and homelab-converge supplies
       # the token content thereafter.
