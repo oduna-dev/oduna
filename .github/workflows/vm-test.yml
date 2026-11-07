@@ -1,11 +1,25 @@
 name: VM boot test
 
-# Manual by default: the boot test pulls the compose images and boots a full
-# guest, so hosted spend happens only when a person starts it. Locally the
-# identical attribute runs with `nix build .#checks.x86_64-linux.vm-test`.
+# Runs on pull requests that touch what the test boots (modules, the demo
+# instance, the test itself, the flake and the secrets template the fixture
+# derives from) and on demand. Locally the identical attribute runs with
+# `nix build .#checks.x86_64-linux.vm-test`.
 
 on:
   workflow_dispatch:
+  pull_request:
+    paths:
+      - modules/**
+      - tests/**
+      - examples/**
+      - secrets/secrets.example.yaml
+      - flake.nix
+      - flake.lock
+      - .github/workflows/vm-test.yml
+
+concurrency:
+  group: vm-test-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   vm-test:
