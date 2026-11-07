@@ -179,6 +179,8 @@ machine.succeed("curl -fsS http://127.0.0.1:4533/ > /dev/null")
 
 # Nightly dumps: run the job once and check that every app's dump landed,
 # that the stopped forgejo is back, and that no backup snapshot is left.
+machine.wait_until_succeeds("docker exec immich_postgres pg_isready -U postgres")
+machine.wait_until_succeeds("docker exec authentik_postgres pg_isready -U authentik")
 machine.succeed("systemctl start backup-databases.service")
 machine.succeed(
     """for pat in \

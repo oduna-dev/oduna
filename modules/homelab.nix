@@ -11,6 +11,20 @@
 }:
 let
   cfg = config.homelab;
+
+  # Fields each dump type needs.
+  dumpFields = {
+    sqlite = [
+      "dataDir"
+      "db"
+    ];
+    postgres-container = [
+      "container"
+      "user"
+    ];
+    command = [ "exec" ];
+  };
+  missingFields = dump: lib.filter (field: dump.${field} == null) dumpFields.${dump.type};
 in
 {
   options.homelab = {
@@ -390,5 +404,16 @@ in
         all of them enabled.
       '';
     }
-  ];
+  ]
+  ++ lib.concatLists (
+    lib.mapAttrsToList (
+      name: app:
+      lib.optionals app.enable (
+        map (dump: {
+          assertion = missingFields dump == [ ];
+          message = "homelab.apps.${name}.backup.dumps: the ${dump.type} dump ${dump.file} needs ${lib.concatStringsSep ", " (missingFields dump)}.";
+        }) app.backup.dumps
+      )
+    ) cfg.apps
+  );
 }
