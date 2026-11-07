@@ -24,6 +24,7 @@ in
               type = "sqlite";
               inherit dataDir;
               db = "db.sqlite3";
+              restore.stopUnits = [ "vaultwarden.service" ];
             }
           ];
           # Attachments, Send uploads and the RSA key sit next to the database.

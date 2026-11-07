@@ -29,6 +29,7 @@ in
               type = "postgres-container";
               container = "immich_postgres";
               user = "postgres";
+              restore.stopContainers = [ "immich_server" ];
             }
           ];
           paths = [ "${cfg.storage.bulkPath}/immich" ];

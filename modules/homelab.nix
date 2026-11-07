@@ -179,6 +179,36 @@ in
                             and started again afterwards, also on failure.
                           '';
                         };
+                        restore = {
+                          stopUnits = lib.mkOption {
+                            type = lib.types.listOf lib.types.str;
+                            default = [ ];
+                            description = ''
+                              Systemd units `homelab-restore` stops while it
+                              puts the app's files and this dump back, and
+                              starts again afterwards.
+                            '';
+                          };
+                          stopContainers = lib.mkOption {
+                            type = lib.types.listOf lib.types.str;
+                            default = [ ];
+                            description = ''
+                              postgres-container: containers of the app's
+                              compose stack that must not write to the
+                              database during the restore. The database
+                              container itself stays up.
+                            '';
+                          };
+                          exec = lib.mkOption {
+                            type = lib.types.nullOr lib.types.str;
+                            default = null;
+                            description = ''
+                              command: absolute path of the executable that
+                              restores the dump named by `$RESTORE_IN`. It
+                              runs as `user` while the service is stopped.
+                            '';
+                          };
+                        };
                       };
                     }
                   );
