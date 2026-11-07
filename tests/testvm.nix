@@ -294,6 +294,10 @@ in
     # Room for the compose stacks' images and runtime state under /var.
     diskSize = 12288;
     cores = 4;
+    # The guest reads the compose stacks' image tarballs (several GB) from the
+    # host's Nix store over 9p, whose default packet size of 16 KiB makes that
+    # the slowest part of the boot.
+    msize = 1048576;
     fileSystems = vmFileSystems;
   };
 
