@@ -48,6 +48,27 @@ applications, providers and the outpost), the Beszel agent key (derived from the
 hub identity) and the Forgejo runner registration (postinstall registers it
 again).
 
+## 0. Seed known data (unverified)
+
+The box starts empty, so seed data before the backup that the drill restores:
+
+```sh
+scripts/drill-data.sh seed <host> root@<ip>     # from the instance directory
+```
+
+This creates a Forgejo repository with two commits and uploads one photo to
+Immich, through the apps' APIs with the shared admin identity. The manifest
+(repository head, photo id and hash) is saved as `.drill-manifest.json` in the
+instance directory, outside the box and the backup. After the restore:
+
+```sh
+scripts/drill-data.sh verify <host> root@<new-ip>
+```
+
+A Vaultwarden item with an attachment and an Actual Budget budget have to be
+created by hand in the apps (their data is encrypted or synced by the client)
+and checked by eye after the restore.
+
 ## 1. Reinstall
 
 Run `bootstrap.sh <host> root@<ip>` from the instance directory with the
