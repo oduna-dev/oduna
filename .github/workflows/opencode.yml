@@ -24,8 +24,8 @@ on:
 # until the job timeout.
 env:
   OPENCODE_PERMISSION: >-
-    {"edit": "deny", "doom_loop": "deny",
-    "external_directory": {"/tmp/*": "allow", "*": "deny"}}
+    {"edit": "deny", "doom_loop": "deny", "external_directory": {"/tmp/*":
+    "allow", "*": "deny"}}
 
 jobs:
   review-ready:
