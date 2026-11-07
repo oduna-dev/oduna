@@ -33,7 +33,7 @@ in
         restartUnits = [ "caddy.service" ];
       };
       "smtp_password".restartUnits = [ "forgejo.service" ];
-      "vaultwarden.env" = {
+      "vaultwarden.env" = lib.mkIf config.homelab.apps.vaultwarden.enable {
         owner = "vaultwarden";
         restartUnits = [ "vaultwarden.service" ];
       };
@@ -47,7 +47,9 @@ in
         "netbird.service"
         "netbird-login.service"
       ];
-      "immich.env".restartUnits = [ "immich-stack.service" ];
+      "immich.env" = lib.mkIf config.homelab.apps.immich.enable {
+        restartUnits = [ "immich-stack.service" ];
+      };
       # Installed as the compose project's .env by the authentik-stack unit.
       "authentik.env".restartUnits = [ "authentik-stack.service" ];
       "borg_passphrase".owner = "root";

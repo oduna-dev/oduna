@@ -26,52 +26,65 @@ let
       trap '${curlPing} "$(cat ${hcHotBackup})/fail" || true' ERR
     ''}
 
-    mkdir -p "$backup_root/vaultwarden" "$backup_root/actual-budget" "$backup_root/immich" "$backup_root/forgejo" "$backup_root/authentik"
+    mkdir -p "$backup_root"
 
-    # Vaultwarden: consistent SQLite copy read from a dedicated ZFS snapshot.
-    # A previous run that failed between snapshot and destroy leaves the
-    # snapshot behind, so drop it before creating a fresh one.
-    ${pkgs.zfs}/bin/zfs destroy fast-pool/appdata/vaultwarden@backup-snap 2>/dev/null || true
-    ${pkgs.zfs}/bin/zfs snapshot fast-pool/appdata/vaultwarden@backup-snap
-    ${pkgs.sqlite}/bin/sqlite3 \
-      "file:${cfg.storage.appdataPath}/vaultwarden/.zfs/snapshot/backup-snap/db.sqlite3?mode=ro" \
-      ".backup '$backup_root/vaultwarden/vaultwarden_$date.sqlite3'"
-    ${pkgs.zfs}/bin/zfs destroy fast-pool/appdata/vaultwarden@backup-snap
-
-    # Actual Budget: same snapshot-read pattern.
-    ${pkgs.zfs}/bin/zfs destroy fast-pool/appdata/actual-budget@backup-snap 2>/dev/null || true
-    ${pkgs.zfs}/bin/zfs snapshot fast-pool/appdata/actual-budget@backup-snap
-    ${pkgs.sqlite}/bin/sqlite3 \
-      "file:${cfg.storage.appdataPath}/actual-budget/.zfs/snapshot/backup-snap/server-files/account.sqlite?mode=ro" \
-      ".backup '$backup_root/actual-budget/actual_account_$date.sqlite3'"
-    ${pkgs.zfs}/bin/zfs destroy fast-pool/appdata/actual-budget@backup-snap
-
-    # Immich PostgreSQL: logical dump from the running container.
-    pg_container="$(${pkgs.docker}/bin/docker ps --filter name=postgres --format '{{.Names}}' | grep immich | head -n 1)"
-    ${pkgs.docker}/bin/docker exec -i "$pg_container" pg_dumpall -c --if-exists -U postgres \
-      | ${pkgs.gzip}/bin/gzip > "$backup_root/immich/immich_db_$date.sql.gz"
-
-    # authentik PostgreSQL: logical dump of the dedicated role's database
-    # from the stack's own PostgreSQL container.
-    ${lib.optionalString (cfg.idp.issuer != "") ''
-      ${pkgs.docker}/bin/docker exec authentik_postgres \
-        pg_dump --format=custom -U authentik authentik \
-        > "$backup_root/authentik/authentik_db_$date.dump"
+    ${lib.optionalString cfg.apps.vaultwarden.enable ''
+      mkdir -p "$backup_root/vaultwarden"
+      # Vaultwarden: consistent SQLite copy read from a dedicated ZFS snapshot.
+      # A previous run that failed between snapshot and destroy leaves the
+      # snapshot behind, so drop it before creating a fresh one.
+      ${pkgs.zfs}/bin/zfs destroy fast-pool/appdata/vaultwarden@backup-snap 2>/dev/null || true
+      ${pkgs.zfs}/bin/zfs snapshot fast-pool/appdata/vaultwarden@backup-snap
+      ${pkgs.sqlite}/bin/sqlite3 \
+        "file:${cfg.storage.appdataPath}/vaultwarden/.zfs/snapshot/backup-snap/db.sqlite3?mode=ro" \
+        ".backup '$backup_root/vaultwarden/vaultwarden_$date.sqlite3'"
+      ${pkgs.zfs}/bin/zfs destroy fast-pool/appdata/vaultwarden@backup-snap
     ''}
 
-    # Forgejo: stop the service for a consistent repository dump. The EXIT
-    # trap brings it back up even when the dump fails; the success path clears
-    # it after the restart.
-    ${pkgs.systemd}/bin/systemctl stop forgejo
-    trap '${pkgs.systemd}/bin/systemctl start forgejo' EXIT
-    ${pkgs.util-linux}/bin/runuser -u forgejo -- \
-      env FORGEJO_WORK_DIR="${cfg.storage.appdataPath}/forgejo" \
-      ${pkgs.forgejo}/bin/forgejo dump \
-        -c "${cfg.storage.appdataPath}/forgejo/custom/conf/app.ini" \
-        -f /tmp/forgejo-dump.zip
-    ${pkgs.systemd}/bin/systemctl start forgejo
-    trap - EXIT
-    mv /tmp/forgejo-dump.zip "$backup_root/forgejo/forgejo_dump_$date.zip"
+    ${lib.optionalString cfg.apps.actual-budget.enable ''
+      mkdir -p "$backup_root/actual-budget"
+      # Actual Budget: same snapshot-read pattern.
+      ${pkgs.zfs}/bin/zfs destroy fast-pool/appdata/actual-budget@backup-snap 2>/dev/null || true
+      ${pkgs.zfs}/bin/zfs snapshot fast-pool/appdata/actual-budget@backup-snap
+      ${pkgs.sqlite}/bin/sqlite3 \
+        "file:${cfg.storage.appdataPath}/actual-budget/.zfs/snapshot/backup-snap/server-files/account.sqlite?mode=ro" \
+        ".backup '$backup_root/actual-budget/actual_account_$date.sqlite3'"
+      ${pkgs.zfs}/bin/zfs destroy fast-pool/appdata/actual-budget@backup-snap
+    ''}
+
+    ${lib.optionalString cfg.apps.immich.enable ''
+      mkdir -p "$backup_root/immich"
+      # Immich PostgreSQL: logical dump from the running container.
+      pg_container="$(${pkgs.docker}/bin/docker ps --filter name=postgres --format '{{.Names}}' | grep immich | head -n 1)"
+      ${pkgs.docker}/bin/docker exec -i "$pg_container" pg_dumpall -c --if-exists -U postgres \
+        | ${pkgs.gzip}/bin/gzip > "$backup_root/immich/immich_db_$date.sql.gz"
+    ''}
+
+    ${lib.optionalString cfg.identity.enable ''
+      mkdir -p "$backup_root/authentik"
+      # authentik PostgreSQL: logical dump of the dedicated role's database
+      # from the stack's own PostgreSQL container.
+        ${pkgs.docker}/bin/docker exec authentik_postgres \
+          pg_dump --format=custom -U authentik authentik \
+          > "$backup_root/authentik/authentik_db_$date.dump"
+    ''}
+
+    ${lib.optionalString cfg.apps.forgejo.enable ''
+      mkdir -p "$backup_root/forgejo"
+      # Forgejo: stop the service for a consistent repository dump. The EXIT
+      # trap brings it back up even when the dump fails; the success path clears
+      # it after the restart.
+      ${pkgs.systemd}/bin/systemctl stop forgejo
+      trap '${pkgs.systemd}/bin/systemctl start forgejo' EXIT
+      ${pkgs.util-linux}/bin/runuser -u forgejo -- \
+        env FORGEJO_WORK_DIR="${cfg.storage.appdataPath}/forgejo" \
+        ${pkgs.forgejo}/bin/forgejo dump \
+          -c "${cfg.storage.appdataPath}/forgejo/custom/conf/app.ini" \
+          -f /tmp/forgejo-dump.zip
+      ${pkgs.systemd}/bin/systemctl start forgejo
+      trap - EXIT
+      mv /tmp/forgejo-dump.zip "$backup_root/forgejo/forgejo_dump_$date.zip"
+    ''}
 
     # Retain 14 days locally; offsite retention is governed by Borg.
     find "$backup_root" -type f -mtime +14 -delete
@@ -119,13 +132,12 @@ in
     after = [
       "docker.service"
       "zfs-mount.service"
-      "immich-stack.service"
     ]
-    ++ lib.optionals (cfg.idp.issuer != "") [ "authentik-stack.service" ];
-    requires = [
-      "immich-stack.service"
-    ]
-    ++ lib.optionals (cfg.idp.issuer != "") [ "authentik-stack.service" ];
+    ++ lib.optionals cfg.apps.immich.enable [ "immich-stack.service" ]
+    ++ lib.optionals cfg.identity.enable [ "authentik-stack.service" ];
+    requires =
+      lib.optionals cfg.apps.immich.enable [ "immich-stack.service" ]
+      ++ lib.optionals cfg.identity.enable [ "authentik-stack.service" ];
     serviceConfig = {
       Type = "oneshot";
       ExecStart = backupScript;

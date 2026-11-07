@@ -5,9 +5,13 @@
 # values via `config.homelab`; nothing hardcodes domains, SMTP relay
 # settings, or storage mount points.
 {
+  config,
   lib,
   ...
 }:
+let
+  cfg = config.homelab;
+in
 {
   options.homelab = {
     instance = {
@@ -40,15 +44,63 @@
       type = lib.types.str;
       description = "Public link-sharing ingress hostname";
     };
+    identity = {
+      enable = lib.mkEnableOption ''
+        The central identity provider (Authentik on this host): its stack, its
+        Caddy vhost and forward-auth gate, and the SSO wiring of the consuming
+        services. Requires `idp.issuer`
+      '';
+    };
+    apps = lib.mkOption {
+      type = lib.types.attrsOf (
+        lib.types.submodule (
+          { name, ... }:
+          {
+            options = {
+              enable = lib.mkEnableOption "the ${name} app";
+              ingress = {
+                subdomain = lib.mkOption {
+                  type = lib.types.str;
+                  description = ''
+                    Host label under `internalDomain` the app is served on.
+                  '';
+                };
+                port = lib.mkOption {
+                  type = lib.types.port;
+                  description = ''
+                    Loopback port the app listens on. The app module feeds
+                    the same value to the service and to the generated vhost.
+                  '';
+                };
+                forwardAuth = lib.mkOption {
+                  type = lib.types.bool;
+                  default = false;
+                  description = ''
+                    Gate the vhost behind the identity provider's forward-auth
+                    outpost when `identity.enable` is set; the identity
+                    headers pass through to the app.
+                  '';
+                };
+              };
+            };
+          }
+        )
+      );
+      default = { };
+      description = ''
+        App registry. Every app module declares its entry here; the ingress
+        and the other registry consumers are generated from the enabled
+        entries. The shipped apps default to enabled.
+      '';
+    };
     idp = {
       issuer = lib.mkOption {
         type = lib.types.str;
         default = "";
         description = ''
           Issuer URL of the central identity provider (Authentik on this host),
-          e.g. https://auth.<internal-domain>. An empty string disables every
-          IdP-dependent config: the authentik services, the Caddy vhost and
-          forward-auth gate, and the SSO wiring of the consuming services.
+          e.g. https://auth.<internal-domain>. Required when
+          `identity.enable` is set.
         '';
       };
       insecureTls = lib.mkEnableOption ''
@@ -215,4 +267,27 @@
       };
     };
   };
+
+  config.assertions = [
+    {
+      assertion = !cfg.identity.enable || cfg.idp.issuer != "";
+      message = "homelab.identity.enable requires homelab.idp.issuer.";
+    }
+    {
+      assertion =
+        !cfg.converge.enable
+        || lib.all (app: cfg.apps.${app}.enable) [
+          "vaultwarden"
+          "forgejo"
+          "navidrome"
+          "actual-budget"
+          "beszel"
+          "immich"
+        ];
+      message = ''
+        homelab.converge provisions every shipped app: disable it, or keep
+        all of them enabled.
+      '';
+    }
+  ];
 }
