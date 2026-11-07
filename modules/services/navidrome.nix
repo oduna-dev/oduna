@@ -17,6 +17,7 @@ in
           port = 4533;
           forwardAuth = true;
         };
+        backup.paths = [ "${cfg.storage.bulkPath}/media/music" ];
       };
     }
     (lib.mkIf app.enable {

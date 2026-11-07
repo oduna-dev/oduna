@@ -25,6 +25,12 @@
 
       converge.enable = true;
 
+      # Instance data outside the apps that goes offsite.
+      backup.paths = [
+        "/mnt/tank/storage/users"
+        "/mnt/tank/media/home-videos"
+      ];
+
       forgejo.runner = {
         enable = true;
         # Printed by `forgejo forgejo-cli actions register` on the host;

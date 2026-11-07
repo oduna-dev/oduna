@@ -22,6 +22,22 @@ in
           subdomain = "immich";
           port = 2283;
         };
+        backup = {
+          dumps = [
+            {
+              file = "immich_db_{date}.sql.gz";
+              type = "postgres-container";
+              container = "immich_postgres";
+              user = "postgres";
+            }
+          ];
+          paths = [ "${cfg.storage.bulkPath}/immich" ];
+          exclude = map (dir: "${cfg.storage.bulkPath}/immich/${dir}") [
+            "thumbs"
+            "encoded-video"
+            "backups"
+          ];
+        };
       };
     }
     (lib.mkIf app.enable {

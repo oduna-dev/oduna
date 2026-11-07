@@ -177,4 +177,23 @@ machine.succeed(
 machine.succeed("curl -fsS http://127.0.0.1:5006/account/needs-bootstrap > /dev/null")
 machine.succeed("curl -fsS http://127.0.0.1:4533/ > /dev/null")
 
+# Nightly dumps: run the job once and check that every app's dump landed,
+# that the stopped forgejo is back, and that no backup snapshot is left.
+machine.wait_until_succeeds("docker exec immich_postgres pg_isready -U postgres")
+machine.wait_until_succeeds("docker exec authentik_postgres pg_isready -U authentik")
+machine.succeed("systemctl start backup-databases.service")
+machine.succeed(
+    """for pat in \
+      vaultwarden/vaultwarden_*.sqlite3 \
+      actual-budget/actual_account_*.sqlite3 \
+      immich/immich_db_*.sql.gz \
+      authentik/authentik_db_*.dump \
+      forgejo/forgejo_dump_*.zip; do
+      f="$(ls /mnt/tank/backups/$pat | head -n 1)"
+      [ -s "$f" ] || { echo "backup $pat missing or empty"; exit 1; }
+    done""",
+    "systemctl is-active forgejo.service",
+    "! zfs list -H -t snapshot -o name | grep -q '@backup-snap'",
+)
+
 print("vm-test: OK")
