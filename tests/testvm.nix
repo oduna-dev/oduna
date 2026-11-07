@@ -329,11 +329,15 @@ in
     script = zfsSetupScript;
   };
 
-  # Tools the test script uses to check that the dumps are restorable.
+  # Tools the test script uses to check that the dumps are restorable and to
+  # run the host half of the restore drill's seed script.
   environment.systemPackages = [
     pkgs.sqlite
     pkgs.unzip
+    pkgs.jq
+    pkgs.curl
   ];
+  environment.etc."drill-data-remote.sh".source = ../scripts/lib/drill-data-remote.sh;
 
   # Make Caddy's private CA visible to the converge runs (merged with the
   # system bundle; curl reads CURL_CA_BUNDLE from its environment).
