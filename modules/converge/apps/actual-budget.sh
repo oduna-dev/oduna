@@ -79,7 +79,7 @@ actual_budget_idp_sso() {
   budget_id="$(cut -d'|' -f2 <<<"$budget_pair")"
   budget_secret="$(cut -d'|' -f3 <<<"$budget_pair")"
   if [ -n "$budget_id" ] && [ -n "$budget_secret" ]; then
-    actual_json="$(jq -cn --arg issuer "$issuer/application/o/budget-homelab" --arg cid "$budget_id" --arg cs "$budget_secret" \
+    actual_json="$(jq -cn --arg issuer "$issuer/application/o/budget-homelab/" --arg cid "$budget_id" --arg cs "$budget_secret" \
       --arg host "https://budget.$INTERNAL_DOMAIN" \
       '{issuer: $issuer, client_id: $cid, client_secret: $cs, server_hostname: $host}')"
     actual_db="$ACTUAL_SERVER_FILES/account.sqlite"
