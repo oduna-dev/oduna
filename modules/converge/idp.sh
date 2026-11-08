@@ -106,6 +106,10 @@ idp_chain() {
     | jq -r '[.results[] | select(.name == "authentik Self-signed Certificate")][0].pk // empty' 2>/dev/null)" || signing_key=""
   [ -n "$signing_key" ] || warn "authentik self-signed signing key not found; providers keep HS256"
 
+  # Authentik leaves the allowed grant types of an API-created provider
+  # empty, which rejects every authorization-code login.
+  oauth2_grants='["authorization_code","refresh_token"]'
+
   url() { printf 'https://%s.%s%s' "$1" "$INTERNAL_DOMAIN" "$2"; }
 
   # Flows are referenced by UUID in provider payloads now; the slugs only go
@@ -128,23 +132,26 @@ idp_chain() {
   # untouched but re-read (pk|client_id|client_secret) so a lost copy
   # converges back to the current secret.
   ensure_oauth2() {
-    local app="$1" rurl="$2" p cur_key
+    local app="$1" rurl="$2" p cur
     p="$(api "/api/v3/providers/oauth2/?name=${app}" \
       | jq -r '.results[0] | "\(.pk // "")|\(.client_id // "")|\(.client_secret // "")"' 2>/dev/null)" || p="|" 
-    cur_key="$(api "/api/v3/providers/oauth2/?name=${app}" \
-      | jq -r '.results[0] | select(. != null) | .signing_key // "none"' 2>/dev/null)" || cur_key=""
-    if [ "$cur_key" = "none" ] && [ -n "$signing_key" ]; then
-      api_patch "/api/v3/providers/oauth2/$(cut -d'|' -f1 <<<"$p")/" \
-        "$(jq -cn --arg k "$signing_key" '{signing_key: $k}')" > /dev/null \
-        && echo "provider:$app: signing key set" >&2
+    # Existing providers: repair a missing signing key and empty grant types.
+    cur="$(api "/api/v3/providers/oauth2/?name=${app}" \
+      | jq -c --arg key "$signing_key" --argjson grants "$oauth2_grants" \
+        '.results[0] | select(. != null) | {pk}
+          + (if .signing_key == null and $key != "" then {signing_key: $key} else {} end)
+          + (if (.grant_types // []) == [] then {grant_types: $grants} else {} end)' 2>/dev/null)" || cur=""
+    if [ -n "$cur" ] && [ "$(jq 'length' <<<"$cur")" -gt 1 ]; then
+      api_patch "/api/v3/providers/oauth2/$(jq -r .pk <<<"$cur")/" "$(jq -c 'del(.pk)' <<<"$cur")" > /dev/null \
+        && echo "provider:$app: signing key / grant types repaired" >&2
     fi
     if [ -z "$(cut -d'|' -f1 <<<"$p")" ]; then
       if [ -n "$authz_flow" ] && [ -n "$inval_flow" ]; then
         p="$(api_post '/api/v3/providers/oauth2/' \
           "$(jq -cn --arg name "$app" \
             --arg flow "$authz_flow" --arg iflow "$inval_flow" \
-            --arg rurl "$rurl" --argjson maps "$oid_mappings" --arg key "$signing_key" \
-            '{name: $name, authorization_flow: $flow, invalidation_flow: $iflow, redirect_uris: [{matching_mode: "strict", url: $rurl}], sub_mode: "user_email", property_mappings: $maps, access_code_validity: "hours=1", access_token_validity: "hours=12", refresh_token_validity: "days=30"} + (if $key == "" then {} else {signing_key: $key} end)')" \
+            --arg rurl "$rurl" --argjson maps "$oid_mappings" --arg key "$signing_key" --argjson grants "$oauth2_grants" \
+            '{name: $name, authorization_flow: $flow, invalidation_flow: $iflow, redirect_uris: [{matching_mode: "strict", url: $rurl}], sub_mode: "user_email", property_mappings: $maps, access_code_validity: "hours=1", access_token_validity: "hours=12", refresh_token_validity: "days=30", grant_types: $grants} + (if $key == "" then {} else {signing_key: $key} end)')" \
           | jq -r '"\(.pk // "")|\(.client_id // "")|\(.client_secret // "")"' 2>/dev/null)" || p=""
       else
         echo "warning: provider $app skipped (provider flows missing)" >&2
