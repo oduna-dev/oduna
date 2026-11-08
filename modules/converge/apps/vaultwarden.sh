@@ -96,7 +96,7 @@ vaultwarden_idp_sso() {
     vw_set SSO_ENABLED true
     vw_set SSO_CLIENT_ID "$vault_id"
     vw_set SSO_CLIENT_SECRET "$vault_secret"
-    vw_set SSO_AUTHORITY "$issuer/application/o/vault-homelab"
+    vw_set SSO_AUTHORITY "$issuer/application/o/vault-homelab/"
     echo "vaultwarden: SSO entries staged in converge.env"
   else
     echo "warning: vaultwarden SSO credentials missing; vault keeps password-only login" >&2
