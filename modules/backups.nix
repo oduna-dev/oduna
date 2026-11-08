@@ -104,7 +104,10 @@ in
       passCommand = "cat ${config.sops.secrets."borg_passphrase".path}";
     };
     environment = {
-      BORG_RSH = "ssh -i /etc/ssh/borg_append_only_key -p 23";
+      # A fresh host has no known_hosts entry for the StorageBox and the job
+      # runs without a terminal: trust the key on first contact, refuse a
+      # changed one afterwards.
+      BORG_RSH = "ssh -i /etc/ssh/borg_append_only_key -p 23 -o StrictHostKeyChecking=accept-new";
     };
     compression = "zstd";
     startAt = "*-*-* 03:30:00";
