@@ -94,17 +94,16 @@ idp_chain() {
   fi
 
   defaults='["goauthentik.io/providers/oauth2/scope-openid","goauthentik.io/providers/oauth2/scope-profile","goauthentik.io/providers/oauth2/scope-email","goauthentik.io/providers/oauth2/scope-offline_access","goauthentik.io/providers/oauth2/scope-entitlements"]'
-  oid_mappings="$(api '/api/v3/propertymappings/provider/scope/?page_size=100' \
+  oid_mappings="$(api '/api/v3/propertymappings/provider/scope/?page_size=1000' \
     | jq -r --argjson managed "$defaults" --arg custom "$mapping_pk" \
       '[.results[] | select(.managed != null and (.managed as $m | $managed | index($m))) | select(.managed != "goauthentik.io/providers/oauth2/scope-email") | .pk] + (if $custom == "" then [] else [$custom] end) | unique' \
     2>/dev/null)" || oid_mappings="[]"
 
   # Providers without a signing key sign ID tokens with HS256 and publish an
-  # empty JWKS, which Vaultwarden's discovery rejects; every provider gets
-  # authentik's self-signed key pair (RS256).
+  # empty JWKS, which Vaultwarden's discovery rejects; every provider gets an
+  # RSA key pair (authentik's self-signed one when present).
   signing_key="$(api '/api/v3/crypto/certificatekeypairs/?has_key=true&page_size=100' \
-    | jq -r '[.results[] | select(.name == "authentik Self-signed Certificate")][0].pk // empty' 2>/dev/null)" || signing_key=""
-  [ -n "$signing_key" ] || warn "authentik self-signed signing key not found; providers keep HS256"
+    | jq -r '[.results[] | select(.key_type == "rsa")] | (map(select(.name == "authentik Self-signed Certificate"))[0] // .[0]) | .pk // empty' 2>/dev/null)" || signing_key=""
 
   # Authentik leaves the allowed grant types of an API-created provider
   # empty, which rejects every authorization-code login.
@@ -147,12 +146,17 @@ idp_chain() {
         && echo "provider:$app: signing key / grant types / scope mappings repaired" >&2
     fi
     if [ -z "$(cut -d'|' -f1 <<<"$p")" ]; then
-      if [ -n "$authz_flow" ] && [ -n "$inval_flow" ]; then
+      # A provider created from failed lookups (IdP token not yet accepted)
+      # would have no scopes and no signing key and stay broken until the next
+      # run; leave it out and let the rerun create it.
+      if [ -z "$signing_key" ] || [ "$oid_mappings" = "[]" ] || [ -z "$oid_mappings" ]; then
+        echo "warning: provider $app skipped (signing key or scope mappings unavailable)" >&2
+      elif [ -n "$authz_flow" ] && [ -n "$inval_flow" ]; then
         p="$(api_post '/api/v3/providers/oauth2/' \
           "$(jq -cn --arg name "$app" \
             --arg flow "$authz_flow" --arg iflow "$inval_flow" \
             --arg rurl "$rurl" --argjson maps "$oid_mappings" --arg key "$signing_key" --argjson grants "$oauth2_grants" \
-            '{name: $name, authorization_flow: $flow, invalidation_flow: $iflow, redirect_uris: [{matching_mode: "strict", url: $rurl}], sub_mode: "user_email", property_mappings: $maps, access_code_validity: "hours=1", access_token_validity: "hours=12", refresh_token_validity: "days=30", grant_types: $grants} + (if $key == "" then {} else {signing_key: $key} end)')" \
+            '{name: $name, authorization_flow: $flow, invalidation_flow: $iflow, redirect_uris: [{matching_mode: "strict", url: $rurl}], sub_mode: "user_email", property_mappings: $maps, access_code_validity: "hours=1", access_token_validity: "hours=12", refresh_token_validity: "days=30", grant_types: $grants} + {signing_key: $key}')" \
           | jq -r '"\(.pk // "")|\(.client_id // "")|\(.client_secret // "")"' 2>/dev/null)" || p=""
       else
         echo "warning: provider $app skipped (provider flows missing)" >&2
