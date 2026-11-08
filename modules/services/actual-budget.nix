@@ -44,6 +44,12 @@ in
           hostname = "127.0.0.1";
           serverFiles = "${cfg.storage.appdataPath}/actual-budget/server-files";
           userFiles = "${cfg.storage.appdataPath}/actual-budget/user-files";
+        }
+        // lib.optionalAttrs cfg.identity.enable {
+          # The IdP is the gate: an identity it vouches for gets a basic
+          # account on first login. Without this Actual rejects every OpenID
+          # user the owner has not added by hand.
+          userCreationMode = "login";
         };
       };
 

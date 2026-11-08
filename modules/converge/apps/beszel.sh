@@ -107,8 +107,8 @@ beszel_idp_sso() {
   if [ -n "$beszel_id" ] && [ -n "$beszel_secret" ] && [ -n "$beszel_hub_token" ]; then
     curl -fsS -X PATCH 'http://127.0.0.1:8090/api/collections/users' \
       -H "Authorization: $beszel_hub_token" -H 'Content-Type: application/json' \
-      -d "$(jq -cn --arg id "$beszel_id" --arg secret "$beszel_secret" --arg isu "$issuer/application/o/beszel-homelab" \
-        '{oauth2: {enabled: true, providers: [{name: "oidc", clientId: $id, clientSecret: $secret, authURL: ($isu + "/authorize"), tokenURL: ($isu + "/token"), userInfoURL: ($isu + "/userinfo"), displayName: "authentik"}]}}')" \
+      -d "$(jq -cn --arg id "$beszel_id" --arg secret "$beszel_secret" --arg isu "$issuer/application/o" \
+        '{oauth2: {enabled: true, providers: [{name: "oidc", clientId: $id, clientSecret: $secret, authURL: ($isu + "/authorize/"), tokenURL: ($isu + "/token/"), userInfoURL: ($isu + "/userinfo/"), displayName: "authentik"}]}}')" \
       | jq -e '.id' > /dev/null \
       && echo "beszel: oidc provider set on the users collection" \
       || echo "warning: beszel oidc registration failed; hub keeps password login" >&2
