@@ -65,6 +65,7 @@ idp_chain() {
   }
   api() { ak_call GET "$1"; }
   api_post() { ak_call POST "$1" "$2"; }
+  api_patch() { ak_call PATCH "$1" "$2"; }
 
   ensure_group() {
     if [ -z "$(api "/api/v3/core/groups/?name=$1" | jq -r '.results[0].pk // empty' 2>/dev/null)" ]; then
@@ -98,6 +99,13 @@ idp_chain() {
       '[.results[] | select(.managed != null and (.managed as $m | $managed | index($m))) | select(.managed != "goauthentik.io/providers/oauth2/scope-email") | .pk] + (if $custom == "" then [] else [$custom] end) | unique' \
     2>/dev/null)" || oid_mappings="[]"
 
+  # Providers without a signing key sign ID tokens with HS256 and publish an
+  # empty JWKS, which Vaultwarden's discovery rejects; every provider gets
+  # authentik's self-signed key pair (RS256).
+  signing_key="$(api '/api/v3/crypto/certificatekeypairs/?has_key=true&page_size=100' \
+    | jq -r '[.results[] | select(.name == "authentik Self-signed Certificate")][0].pk // empty' 2>/dev/null)" || signing_key=""
+  [ -n "$signing_key" ] || warn "authentik self-signed signing key not found; providers keep HS256"
+
   url() { printf 'https://%s.%s%s' "$1" "$INTERNAL_DOMAIN" "$2"; }
 
   # Flows are referenced by UUID in provider payloads now; the slugs only go
@@ -120,16 +128,23 @@ idp_chain() {
   # untouched but re-read (pk|client_id|client_secret) so a lost copy
   # converges back to the current secret.
   ensure_oauth2() {
-    local app="$1" rurl="$2" p
+    local app="$1" rurl="$2" p cur_key
     p="$(api "/api/v3/providers/oauth2/?name=${app}" \
       | jq -r '.results[0] | "\(.pk // "")|\(.client_id // "")|\(.client_secret // "")"' 2>/dev/null)" || p="|" 
+    cur_key="$(api "/api/v3/providers/oauth2/?name=${app}" \
+      | jq -r '.results[0] | select(. != null) | .signing_key // "none"' 2>/dev/null)" || cur_key=""
+    if [ "$cur_key" = "none" ] && [ -n "$signing_key" ]; then
+      api_patch "/api/v3/providers/oauth2/$(cut -d'|' -f1 <<<"$p")/" \
+        "$(jq -cn --arg k "$signing_key" '{signing_key: $k}')" > /dev/null \
+        && echo "provider:$app: signing key set" >&2
+    fi
     if [ -z "$(cut -d'|' -f1 <<<"$p")" ]; then
       if [ -n "$authz_flow" ] && [ -n "$inval_flow" ]; then
         p="$(api_post '/api/v3/providers/oauth2/' \
           "$(jq -cn --arg name "$app" \
             --arg flow "$authz_flow" --arg iflow "$inval_flow" \
-            --arg rurl "$rurl" --argjson maps "$oid_mappings" \
-            '{name: $name, authorization_flow: $flow, invalidation_flow: $iflow, redirect_uris: [{matching_mode: "strict", url: $rurl}], sub_mode: "user_email", property_mappings: $maps, access_code_validity: "hours=1", access_token_validity: "hours=12", refresh_token_validity: "days=30"}')" \
+            --arg rurl "$rurl" --argjson maps "$oid_mappings" --arg key "$signing_key" \
+            '{name: $name, authorization_flow: $flow, invalidation_flow: $iflow, redirect_uris: [{matching_mode: "strict", url: $rurl}], sub_mode: "user_email", property_mappings: $maps, access_code_validity: "hours=1", access_token_validity: "hours=12", refresh_token_validity: "days=30"} + (if $key == "" then {} else {signing_key: $key} end)')" \
           | jq -r '"\(.pk // "")|\(.client_id // "")|\(.client_secret // "")"' 2>/dev/null)" || p=""
       else
         echo "warning: provider $app skipped (provider flows missing)" >&2
