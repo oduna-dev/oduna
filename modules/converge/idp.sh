@@ -35,6 +35,13 @@ idp_chain() {
     return 1
   fi
   ak_token="$(sed -n 's/^AUTHENTIK_BOOTSTRAP_TOKEN=//p' "$AUTHENTIK_ENV_FILE" 2>/dev/null || true)"
+  # The liveness endpoint answers before the bootstrap token exists (the API
+  # then replies 403 "Token invalid/expired"), so wait for it to be accepted.
+  for _ in $(seq 1 20); do
+    curl -fsS --max-time 5 -H "Authorization: Bearer $ak_token" \
+      "$issuer/api/v3/core/users/me/" > /dev/null 2>&1 && break
+    sleep 3
+  done
   # Any non-2xx response (notably authentik's 400 validation errors, which name
   # the offending fields) is printed to the journal before the step degrades.
   ak_call() {

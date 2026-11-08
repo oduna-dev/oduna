@@ -38,6 +38,7 @@ run_hooks() {
 
 # --- Run ----------------------------------------------------------------------
 
+wait_for_tls || true
 run_hooks init
 run_hooks breakglass
 step "IdP provisioning"
