@@ -2,8 +2,7 @@ name: VM boot test
 
 # Runs on pull requests that touch what the test boots (modules, the demo
 # instance, the test itself, the flake and the secrets template the fixture
-# derives from) and on demand. Locally the identical attribute runs with
-# `nix build .#checks.x86_64-linux.vm-test`.
+# derives from) and on demand.
 
 on:
   workflow_dispatch:
@@ -16,6 +15,7 @@ on:
       - flake.nix
       - flake.lock
       - .github/workflows/vm-test.yml
+      - .github/workflows/nix-vm-check.yml
 
 concurrency:
   group: vm-test-${{ github.ref }}
@@ -23,53 +23,6 @@ concurrency:
 
 jobs:
   vm-test:
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v7
-      - name: Free disk space (in the background)
-        run: |
-          df -h /
-          setsid nohup sudo rm -rf /usr/share/dotnet /usr/local/lib/android \
-            /opt/ghc /opt/hostedtoolcache/CodeQL > /dev/null 2>&1 &
-      - name: Enable KVM
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
-            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-          ls -l /dev/kvm
-          test -c /dev/kvm
-      - uses: DeterminateSystems/nix-installer-action@v23
-      - name: Check KVM inside the Nix build sandbox
-        run: |
-          nix config show | grep -E '^(system-features|extra-system-features|sandbox)' || true
-          nix build --impure -L --no-link --expr '
-            let
-              flake = builtins.getFlake "'"$PWD"'";
-              pkgs = flake.inputs.nixpkgs.legacyPackages.x86_64-linux;
-            in
-            pkgs.runCommand "kvm-sandbox-check" { requiredSystemFeatures = [ "kvm" ]; } "
-              ls -l /dev/kvm
-              test -w /dev/kvm
-              touch $out
-            "'
-      - name: Build the test inputs
-        shell: bash
-        run: |
-          # Everything the test consumes (compose image tarballs, the system
-          # closure), built apart from the VM run so that the next step times
-          # the guest alone and this one times fetching and building.
-          drv="$(nix eval --raw .#checks.x86_64-linux.vm-test.drvPath)"
-          nix-store --query --references "$drv" | grep -F '.drv' \
-            | xargs -r nix-store --realise > /dev/null
-      - name: Boot the demo instance and assert convergence
-        shell: bash
-        run: |
-          status=0
-          timeout 25m nix build .#checks.x86_64-linux.vm-test -L > build.log 2>&1 || status=$?
-          # The driver repeats two lines every few seconds while the guest
-          # shell is silent; drop them so the guest console stays readable.
-          grep -v -e 'Guest root shell did not produce' -e 'To debug, enter the VM' build.log | tail -n 1500
-          echo "nix build exit status: $status"
-          df -h /
-          exit "$status"
+    uses: ./.github/workflows/nix-vm-check.yml
+    with:
+      check: vm-test

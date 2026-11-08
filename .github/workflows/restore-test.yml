@@ -1,0 +1,32 @@
+name: Backup and restore test
+
+# Runs on pull requests that touch the backup and restore code or the pieces
+# its guest depends on, and on demand (Actions tab, "Run workflow"). Any other
+# pull request skips it; the boot test covers those.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - modules/backups.nix
+      - modules/backups/**
+      - modules/services/forgejo/**
+      - modules/zfs.nix
+      - modules/appdata-dirs.nix
+      - scripts/drill-data.sh
+      - scripts/lib/drill-data-remote.sh
+      - tests/restore-test.py
+      - tests/testvm.nix
+      - flake.lock
+      - .github/workflows/restore-test.yml
+      - .github/workflows/nix-vm-check.yml
+
+concurrency:
+  group: restore-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  restore-test:
+    uses: ./.github/workflows/nix-vm-check.yml
+    with:
+      check: restore-test

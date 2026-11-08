@@ -111,22 +111,32 @@
         ];
       };
 
-      checks.x86_64-linux.vm-test = (pkgsFor "x86_64-linux").testers.nixosTest {
-        name = "vm-test";
-        nodes.machine.imports = demoVmModules;
-        testScript =
-          { nodes, ... }:
-          builtins.replaceStrings
-            [
-              "@internalDomain@"
-              "@outpostName@"
-            ]
-            [
-              nodes.machine.homelab.internalDomain
-              "${nodes.machine.networking.hostName}-navidrome"
-            ]
-            (builtins.readFile ./tests/vm-test.py);
-      };
+      checks.x86_64-linux =
+        let
+          # One guest, one drive script: the demo host configuration under QEMU.
+          vmTest =
+            name: script:
+            (pkgsFor "x86_64-linux").testers.nixosTest {
+              inherit name;
+              nodes.machine.imports = demoVmModules;
+              testScript =
+                { nodes, ... }:
+                builtins.replaceStrings
+                  [
+                    "@internalDomain@"
+                    "@outpostName@"
+                  ]
+                  [
+                    nodes.machine.homelab.internalDomain
+                    "${nodes.machine.networking.hostName}-navidrome"
+                  ]
+                  (builtins.readFile script);
+            };
+        in
+        {
+          vm-test = vmTest "vm-test" ./tests/vm-test.py;
+          restore-test = vmTest "restore-test" ./tests/restore-test.py;
+        };
 
       apps = forAllSystems (
         system:

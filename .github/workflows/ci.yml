@@ -19,5 +19,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: DeterminateSystems/nix-installer-action@v23
-      - name: Evaluate the VM boot test (demo instance)
-        run: nix eval --raw .#checks.x86_64-linux.vm-test.drvPath
+      - name: Evaluate the VM tests (demo instance)
+        run: |
+          nix eval --raw .#checks.x86_64-linux.vm-test.drvPath
+          nix eval --raw .#checks.x86_64-linux.restore-test.drvPath

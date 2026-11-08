@@ -96,7 +96,8 @@ hardware and restoring the data is described in
 ```bash
 nix run .#lint    # gitleaks, nixfmt, deadnix, Prettier, markdownlint, shellcheck
 nix fmt           # format Nix files
-nix build .#checks.x86_64-linux.vm-test   # boot test of the demo instance (needs KVM)
+nix build .#checks.x86_64-linux.vm-test       # boot test of the demo instance (needs KVM)
+nix build .#checks.x86_64-linux.restore-test  # backup and restore round trip (needs KVM)
 ```
 
 Work happens on one branch per task and goes into `main` through a pull request
