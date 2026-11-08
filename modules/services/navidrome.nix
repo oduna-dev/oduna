@@ -37,7 +37,7 @@ in
           # keyed on the email claim (the IdP is authoritative for identities).
           ExtAuth = {
             UserHeader = "X-Authentik-Email";
-            TrustedSources = "127.0.0.1";
+            TrustedSources = "127.0.0.1/32";
           };
         };
       };
