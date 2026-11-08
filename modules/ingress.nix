@@ -107,6 +107,13 @@ in
     _: app: "${app.ingress.subdomain}.${cfg.internalDomain}"
   ) apps;
 
+  # The first certificate attempt runs at start; without the network it fails
+  # immediately and the retry costs a minute.
+  systemd.services.caddy = {
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+  };
+
   services.caddy = {
     enable = true;
     # The INWX plugin is only needed while the TLS mode issues public
