@@ -21,6 +21,24 @@ fj() {
     "$FORGEJO_EXEC" admin user "$@"
 }
 
+# Waits until Caddy serves a verifiable certificate for the private vhosts.
+# On a fresh host the wildcard certificate is issued minutes after boot (DNS
+# challenge plus propagation wait), while converge starts at activation; the
+# steps that talk to the apps through their hostnames would fail until then.
+# The probe name resolves to the host itself and only needs a completed TLS
+# handshake, any HTTP status will do. Bounded: the steps degrade to warnings.
+wait_for_tls() {
+  local _
+  for _ in $(seq 1 72); do
+    curl -sS --max-time 5 -o /dev/null \
+      --resolve "tls-probe.$INTERNAL_DOMAIN:443:127.0.0.1" \
+      "https://tls-probe.$INTERNAL_DOMAIN/" 2> /dev/null && return 0
+    sleep 5
+  done
+  warn "no usable TLS certificate for *.$INTERNAL_DOMAIN after the bounded wait"
+  return 1
+}
+
 # --- read the shared admin identity ----------------------------------------
 
 admin_email="$(sed -n 's/^ADMIN_EMAIL=//p' "$ADMIN_ENV_FILE" 2>/dev/null || true)"
