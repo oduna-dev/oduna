@@ -88,7 +88,7 @@ immich_idp_sso() {
       echo "warning: immich oauth config not applied (merge workspace unavailable)" >&2
     else
       jq -cn --arg id "$immich_id" --arg secret "$immich_secret" \
-        --arg isu "$issuer/application/o/immich-homelab" \
+        --arg isu "$issuer/application/o/immich-homelab/" \
         '{enabled: true, autoRegister: true, autoLaunch: false, buttonText: "Login with authentik", clientId: $id, clientSecret: $secret, issuerUrl: $isu, scope: "openid email profile", tokenEndpointAuthMethod: "client_secret_post", signingAlgorithm: "RS256"}' \
         > "$immich_tmp/oauth" \
         && curl -fsS "https://immich.$INTERNAL_DOMAIN/api/system-config" \
