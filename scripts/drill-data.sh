@@ -58,7 +58,7 @@ fi
 # has no jq on its PATH, so the script falls back to a throwaway nix shell.
 rc=0
 out="$(ssh -o ConnectTimeout=10 "$target" \
-  "MODE='$mode' INTERNAL_DOMAIN='$internal_domain' FORGEJO_ENABLED='$forgejo_enabled' IMMICH_ENABLED='$immich_enabled' FORGEJO_PORT='$forgejo_port' MANIFEST='$manifest' bash -c 'command -v jq >/dev/null 2>&1 && exec bash -s || exec nix shell nixpkgs#jq --command bash -s'" \
+  "MODE='$mode' INTERNAL_DOMAIN='$internal_domain' FORGEJO_ENABLED='$forgejo_enabled' IMMICH_ENABLED='$immich_enabled' FORGEJO_PORT='$forgejo_port' MANIFEST='$manifest' bash -c 'command -v jq >/dev/null 2>&1 && exec bash -s || exec nix --extra-experimental-features \"nix-command flakes\" shell nixpkgs#jq --command bash -s'" \
   < "$here/lib/drill-data-remote.sh")" || rc=$?
 if [ "$mode" = "seed" ]; then
   [ "$rc" -eq 0 ] || exit "$rc"
