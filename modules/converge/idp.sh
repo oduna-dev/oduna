@@ -94,7 +94,7 @@ idp_chain() {
   fi
 
   defaults='["goauthentik.io/providers/oauth2/scope-openid","goauthentik.io/providers/oauth2/scope-profile","goauthentik.io/providers/oauth2/scope-email","goauthentik.io/providers/oauth2/scope-offline_access","goauthentik.io/providers/oauth2/scope-entitlements"]'
-  oid_mappings="$(api '/api/v3/propertymappings/provider/scope/?page_size=1000' \
+  oid_mappings="$(api '/api/v3/propertymappings/provider/scope/?page_size=100' \
     | jq -r --argjson managed "$defaults" --arg custom "$mapping_pk" \
       '[.results[] | select(.managed != null and (.managed as $m | $managed | index($m))) | select(.managed != "goauthentik.io/providers/oauth2/scope-email") | .pk] + (if $custom == "" then [] else [$custom] end) | unique' \
     2>/dev/null)" || oid_mappings="[]"
@@ -135,15 +135,16 @@ idp_chain() {
     local app="$1" rurl="$2" p cur
     p="$(api "/api/v3/providers/oauth2/?name=${app}" \
       | jq -r '.results[0] | "\(.pk // "")|\(.client_id // "")|\(.client_secret // "")"' 2>/dev/null)" || p="|" 
-    # Existing providers: repair a missing signing key and empty grant types.
+    # Existing providers: repair a missing signing key, empty grant types and empty scope mappings.
     cur="$(api "/api/v3/providers/oauth2/?name=${app}" \
-      | jq -c --arg key "$signing_key" --argjson grants "$oauth2_grants" \
+      | jq -c --arg key "$signing_key" --argjson grants "$oauth2_grants" --argjson maps "$oid_mappings" \
         '.results[0] | select(. != null) | {pk}
           + (if .signing_key == null and $key != "" then {signing_key: $key} else {} end)
-          + (if (.grant_types // []) == [] then {grant_types: $grants} else {} end)' 2>/dev/null)" || cur=""
+          + (if (.grant_types // []) == [] then {grant_types: $grants} else {} end)
+          + (if (.property_mappings // []) == [] and ($maps | length) > 0 then {property_mappings: $maps} else {} end)' 2>/dev/null)" || cur=""
     if [ -n "$cur" ] && [ "$(jq 'length' <<<"$cur")" -gt 1 ]; then
       api_patch "/api/v3/providers/oauth2/$(jq -r .pk <<<"$cur")/" "$(jq -c 'del(.pk)' <<<"$cur")" > /dev/null \
-        && echo "provider:$app: signing key / grant types repaired" >&2
+        && echo "provider:$app: signing key / grant types / scope mappings repaired" >&2
     fi
     if [ -z "$(cut -d'|' -f1 <<<"$p")" ]; then
       if [ -n "$authz_flow" ] && [ -n "$inval_flow" ]; then
