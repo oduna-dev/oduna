@@ -27,7 +27,7 @@ services:
     container_name: immich_machine_learning
     # CPU-only inference (buffalo_s / ViT-B-32); switch the tag to -cuda when
     # the reserved GPU slot is populated.
-    image: ghcr.io/immich-app/immich-machine-learning:v3.3.3
+    image: ghcr.io/immich-app/immich-machine-learning:v3.4.1
     volumes:
       - model-cache:/cache
     env_file:
