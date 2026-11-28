@@ -18,7 +18,7 @@ name: authentik
 services:
   postgres:
     container_name: authentik_postgres
-    image: docker.io/library/postgres:16-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab
+    image: docker.io/library/postgres:19-alpine@sha256:cac45fb483caee3668946088a1c0532db89d5285c28dbfeac889b4068296e06f
     environment:
       POSTGRES_DB: authentik
       POSTGRES_USER: authentik
