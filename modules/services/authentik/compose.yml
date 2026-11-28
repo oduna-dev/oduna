@@ -100,7 +100,7 @@ services:
 
   outpost:
     container_name: authentik_outpost
-    image: ghcr.io/goauthentik/proxy:2026.8.5@sha256:34640cf41e009ab052d4b9119cea816713adcd1eaac95de6caefebfe86d3fcd9
+    image: ghcr.io/goauthentik/proxy:2026.8.7@sha256:fb5173f4f41add451f20b65490248ddaebea70ff0b552ec7b2520ebfdaf61d36
     network_mode: host
     env_file:
       - .env
